@@ -1,0 +1,28 @@
+src/__pycache__/__init__.cpython-39.pyc
+src/__pycache__/chemistry.cpython-39.pyc
+src/__pycache__/cluster_viewer.cpython-39.pyc
+__pycache__/cluster_viewer.cpython-39.pyc
+development/fingerprint.ipynb
+development/chemistry copy 2.py
+development/chemistry copy.py
+development/cns copy.csv
+development/cns_old.csv
+development/comp_list2.csv
+development/diverset.csv
+development/kinaselib.csv
+development/test.ipynb
+development/test.py
+development/test2.ipynb
+development/test3.ipynb
+development/old/all_smiles.csv
+development/old/chem_info.csv
+development/old/cluster_viewer copy 2.py
+development/old/cluster_viewer copy.py
+development/old/comp_list_backup.csv
+development/old/comp_list2.csv
+development/old/copilot.py
+development/old/img.svg
+development/old/merged.svg
+development/old/node_color.csv
+development/old/node_position.csv
+development/old/subset_smiles.csv
