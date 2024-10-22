@@ -41,11 +41,8 @@ TODO LIST:
     - [ ] FIX: Re-introduce pruned clusters to graph so that Compound Search works (fails currently). Do this by checking to see if they contain any compounds of interest!
 
 '''
-class MockEvent:
-    def __init__(self, new):
-        self.new = new
 
-class ClusterGUI(param.Parameterized):
+class ClusterF(param.Parameterized):
     libraries = ['cns']  # 'diverset': ChemLibrary('diverset')}
     default_string = 'Search for Super Cluster containing a specific compound ID'
 
@@ -451,12 +448,17 @@ class ClusterGUI(param.Parameterized):
         }
         self.color_dict = color_dict
 
+class MockEvent:
+    def __init__(self, new):
+        self.new = new
 
-clusterGUI = ClusterGUI()
+
+
+clusterF = ClusterF()
 
 pn.Column(
     pn.Param(
-        clusterGUI.param,
+        clusterF.param,
         parameters=[
             'lib_select',
             'subset_select',
@@ -470,16 +472,16 @@ pn.Column(
         },
         show_name=False,
     ),
-    clusterGUI.cluster_chart,
-    clusterGUI.slider_widget,
-    # clusterGUI.text_box,
+    clusterF.cluster_chart,
+    clusterF.slider_widget,
+    # clusterF.text_box,
     pn.Param(
-        clusterGUI.param,
+        clusterF.param,
         parameters=['compound_input'],
         widgets={
             'compound_input': {
                 'type': pn.widgets.TextAreaInput,
-                'placeholder': clusterGUI.default_string,
+                'placeholder': clusterF.default_string,
                 # 'height': 250,
                 'name': 'Compound ID Search',
             },
@@ -487,22 +489,22 @@ pn.Column(
         show_name=False,
     ),
     pn.Param(
-        clusterGUI.param,
+        clusterF.param,
         parameters=['search_button', 'save_button'],
         default_layout=pn.Row,
         margin=(-2, 5),
         show_name=False,
     ),
-    pn.pane.Markdown(clusterGUI.param.selected_compound, margin=(0, 10)),
-    clusterGUI.compound_image,
+    pn.pane.Markdown(clusterF.param.selected_compound, margin=(0, 10)),
+    clusterF.compound_image,
 ).servable(target='sidebar')
 pn.Column(
     pn.Row(
-        clusterGUI.cluster_graph,
-        pn.Column(clusterGUI.compound_grid, height=700, scroll=True),
+        clusterF.cluster_graph,
+        pn.Column(clusterF.compound_grid, height=700, scroll=True),
         height=700,
     ),
-    clusterGUI.compound_table,
+    clusterF.compound_table,
     width=1600,
 ).servable(target='main', title='ChemBridge Compound Viewer')
 

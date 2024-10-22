@@ -26,3 +26,8 @@ development/old/merged.svg
 development/old/node_color.csv
 development/old/node_position.csv
 development/old/subset_smiles.csv
+development/suppliers.ipynb
+compound_libraries/N1477-1.sdf
+compound_libraries/NT0685-2.sdf
+development/diverset_smiles.csv
+development/diverset_smiles.xlsx
