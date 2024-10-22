@@ -9,7 +9,7 @@ import param
 import networkx as nx
 from src.chemistry import ChemLibrary
 
-pn.extension('tabulator', template="fast", sizing_mode="stretch_width")
+pn.extension('tabulator', sizing_mode="stretch_width")
 
 '''
 TODO LIST:
@@ -42,15 +42,15 @@ TODO LIST:
 
 '''
 
+
 class ClusterF(param.Parameterized):
     libraries = ['cns']  # 'diverset': ChemLibrary('diverset')}
-    default_string = 'Search for Super Cluster containing a specific compound ID'
 
     # Widgets
     lib_select = param.Selector(objects=libraries, default=libraries[0])
     fine_threshold = param.Number(0.2)
     coarse_threshold = param.Number(0.4)
-    subset_select = param.FileSelector(path=os.path.join('compound_subsets','*.csv*'))
+    subset_select = param.FileSelector(path=os.path.join('compound_subsets', '*.csv*'))
     compound_input = param.String()
     selected_compound = param.String()
     selected_nodes = param.List()  # Track the selected node
@@ -209,7 +209,7 @@ class ClusterF(param.Parameterized):
         if compounds:
             # NOTE: cheesy way to force search for single compounds
             # not great for usability FIX.
-            compound = [int(comp) for comp in compounds][0]    
+            compound = [int(comp) for comp in compounds][0]
             try:
                 cluster = self.library.get_compounds(compound)[
                     str(self.fine_threshold)
@@ -223,11 +223,11 @@ class ClusterF(param.Parameterized):
                 # TODO: Below seems like a janky fix...but it works.
                 event = MockEvent(super_cluster)
                 self.update_throttled(event)
-                
+
             except IndexError:
                 # TODO: Should return default looking text, not input style text
                 self.compound_input = 'Compound not found in library, check ID'
-        
+
     @param.depends('save_button', watch=True)
     def save_spreadsheet(self):
         # NOTE: see link (1) at bottom of this file if you want to implment saving
@@ -448,15 +448,15 @@ class ClusterF(param.Parameterized):
         }
         self.color_dict = color_dict
 
+
 class MockEvent:
     def __init__(self, new):
         self.new = new
 
 
-
 clusterF = ClusterF()
 
-pn.Column(
+sidebar = pn.Column(
     pn.Param(
         clusterF.param,
         parameters=[
@@ -474,15 +474,13 @@ pn.Column(
     ),
     clusterF.cluster_chart,
     clusterF.slider_widget,
-    # clusterF.text_box,
     pn.Param(
         clusterF.param,
         parameters=['compound_input'],
         widgets={
             'compound_input': {
                 'type': pn.widgets.TextAreaInput,
-                'placeholder': clusterF.default_string,
-                # 'height': 250,
+                'placeholder': 'Search for Super Cluster containing a specific compound ID',
                 'name': 'Compound ID Search',
             },
         },
@@ -497,8 +495,8 @@ pn.Column(
     ),
     pn.pane.Markdown(clusterF.param.selected_compound, margin=(0, 10)),
     clusterF.compound_image,
-).servable(target='sidebar')
-pn.Column(
+)
+main = pn.Column(
     pn.Row(
         clusterF.cluster_graph,
         pn.Column(clusterF.compound_grid, height=700, scroll=True),
@@ -506,7 +504,13 @@ pn.Column(
     ),
     clusterF.compound_table,
     width=1600,
-).servable(target='main', title='ChemBridge Compound Viewer')
+)
+
+pn.template.FastListTemplate(
+    title="ChemBridge Compound Viewer",
+    sidebar=sidebar,
+    main=main,
+).servable()
 
 
 # References:
