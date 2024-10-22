@@ -1,5 +1,5 @@
 # ClusterF
-*An application for finding and viewing chemical clusters in the Chembridge library based on HTS results*
+*An application for finding and viewing chemical clusters in the Chembridge libraries based on HTS results*
 
 ## Getting Started
 
