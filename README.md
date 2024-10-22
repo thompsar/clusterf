@@ -7,7 +7,7 @@
     - The easiest way to **install** necessary python dependancies is using [Anaconda](https://www.anaconda.com/products/individual).
  
 2. The following **dependancies must be installed** prior to running HTScampaign (do this by launching the `CMD.exe Prompt` from the Anaconda launcher, type the following commands and follow the prompts):
-    - For panels: `conda install -c conda-forge panels`
+    - For panel: `conda install -c conda-forge panel`
 
 3. The file structure is as follows:  
 
