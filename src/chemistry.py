@@ -242,6 +242,7 @@ class ChemLibrary:
         self,
         compound_ids,
         mols_per_row=6,
+        max_rows=3,
         common_substructure=None,
         color_dict=None,
         orient=False,
@@ -254,8 +255,10 @@ class ChemLibrary:
         ----------
         compound_ids : list of str, int, or single str, int
             Chembridge compound IDs
-        molsPerRow : int, optional
+        mols_per_row : int, optional
             number of molecules drawn per row, by default 6
+        max_rows : int, optional
+            maximum number of rows, by default 3
         transparent : bool, optional
             draw grid with transparent background, by default False
         legend : bool, optional
@@ -263,7 +266,7 @@ class ChemLibrary:
 
         Returns
         -------
-        image : SVG image of compound or compounds in grid
+        image : SVG of compound or compounds in grid
         """
 
         img_size = 300  # Smaller size for better performance in web apps
@@ -272,14 +275,16 @@ class ChemLibrary:
         compound_ids = chem_info['Compound'].values
         categories = chem_info['Category'].values
         mols = [Chem.MolFromSmiles(smiles_str) for smiles_str in chem_info['SMILES']]
-
+        nmols = len(mols)
         # Handle multiple molecules in a grid
-        if len(mols) > 1:
-
+        if nmols > 1:
+            
             if orient:
                 mols, highlight_atoms, common_substructure = orient_mols(
                     mols, return_pattern=True
                 )
+                print(len(highlight_atoms))
+
                 highlight_colors = [
                     {idx: (86 / 255, 180 / 255, 233 / 255, 0.5) for idx in highlight}
                     for highlight in highlight_atoms
@@ -288,64 +293,76 @@ class ChemLibrary:
                 highlight_atoms = None
                 highlight_colors = None
 
-            # Render the molecules in SVG format
-            img = Draw.MolsToGridImage(
-                mols,
-                molsPerRow=mols_per_row,
-                subImgSize=(img_size, img_size),
-                highlightAtomLists=highlight_atoms,
-                highlightAtomColors=highlight_colors,
-                legends=[str(compound_id) for compound_id in compound_ids],
-                useSVG=True,  # Use SVG rendering for efficiency
-            )
-
-            # add gridlines (make into function later)
-            delimiter = '</rect>\n'
-            head, tail = img.data.split(delimiter)
-            # head, tail = img.split(delimiter)
-            head = head + delimiter
-            std_bg_style = "opacity:1.0;fill:#FFFFFF;stroke:none"
-
-            # note stroke-width is 4 since gridlines are 2 wide
-            # but double up with neighboring cells
-            if transparent:
-                new_bg_style = "opacity:0.0;fill:none;stroke:black;stroke-width:4"
-                head = head.replace(std_bg_style, new_bg_style)
-            else:
-                new_bg_style = "opacity:1.0;fill:#FFFFFF;stroke:black;stroke-width:4"
-                head = head.replace(std_bg_style, new_bg_style)
-
-            if color_dict is None:
-                color_dict = {category: 'none' for category in set(categories)}
-            # override color_dict miss to none
-            color_dict['Miss'] = 'none'
-            grid = [
-                (
-                    f'<rect width="{img_size}" '
-                    f'height="{img_size}" '
-                    f'x="{x}" y="{y}" '
-                    'style="fill:none;'
-                    'fill-opacity:0.3;'
-                    'stroke:black;'
-                    'stroke-width:2;'
-                    'stroke-opacity:1"/>'
+            ngrids = int(np.ceil(nmols/(mols_per_row*max_rows)))
+            mols_per_grid = mols_per_row * max_rows
+            # slices = [range(i*mols_per_grid,(i+1)*mols_per_grid) for i in range(ngrids)]
+            imgs = []
+            for i in range(ngrids):
+                start = i*mols_per_grid
+                end = (i+1)*mols_per_grid
+                # Render the molecules in SVG format
+                img = Draw.MolsToGridImage(
+                    mols[start:end],
+                    molsPerRow=mols_per_row,
+                    subImgSize=(img_size, img_size),
+                    highlightAtomLists=highlight_atoms[start:end],
+                    highlightAtomColors=highlight_colors[start:end],
+                    legends=[str(compound_id) for compound_id in compound_ids][start:end],
+                    useSVG=True,  # Use SVG rendering for efficiency
                 )
-                
-                for y in range(0, img_size * (len(mols) // mols_per_row+1), img_size)
-                for x in range(0, img_size * mols_per_row, img_size)
-            ]
-            # below requires the grid be draw row wise as is done above with y,x in for loop
-            # i dont really like this, but its less clunky than trying to cram it in above
-            # find a better way!
-            grid[: len(categories)] = [
-                line.replace('fill:none', f'fill:{color_dict[category]}')
-                for category, line in zip(categories, grid[: len(categories)])
-            ]
-            
 
-            grid = '\n'.join(grid)
-            img.data = head + grid + tail
-            # img = head + grid + tail
+                # add gridlines (make into function later)
+                delimiter = '</rect>\n'
+                head, tail = img.data.split(delimiter)
+                # head, tail = img.split(delimiter)
+                head = head + delimiter
+                std_bg_style = "opacity:1.0;fill:#FFFFFF;stroke:none"
+
+                # note stroke-width is 4 since gridlines are 2 wide
+                # but double up with neighboring cells
+                if transparent:
+                    new_bg_style = "opacity:0.0;fill:none;stroke:black;stroke-width:4"
+                    head = head.replace(std_bg_style, new_bg_style)
+                else:
+                    new_bg_style = "opacity:1.0;fill:#FFFFFF;stroke:black;stroke-width:4"
+                    head = head.replace(std_bg_style, new_bg_style)
+
+                if color_dict is None:
+                    color_dict = {category: 'none' for category in set(categories)}
+                # override color_dict miss to none
+                color_dict['Miss'] = 'none'
+                grid_fill = [
+                    (
+                        f'<rect width="{img_size}" '
+                        f'height="{img_size}" '
+                        f'x="{x}" y="{y}" '
+                        'style="fill:none;'
+                        'fill-opacity:0.3;'
+                        'stroke:black;'
+                        'stroke-width:2;'
+                        'stroke-opacity:1"/>'
+                    )
+                    
+                    for y in range(0, img_size * (len(mols) // mols_per_row+1), img_size)
+                    for x in range(0, img_size * mols_per_row, img_size)
+                ]
+                # below requires the grid_fill be draw row wise as is done above with y,x in for loop
+                # i dont really like this, but its less clunky than trying to cram it in above
+                # find a better way!
+                grid_fill[: len(categories)] = [
+                    line.replace('fill:none', f'fill:{color_dict[category]}')
+                    for category, line in zip(categories, grid_fill[: len(categories)])
+                ]
+                
+
+                grid_fill = '\n'.join(grid_fill)
+                img.data = head + grid_fill + tail
+                # img = head + grid_fill + tail
+                imgs.append(img)
+            if orient:
+                return imgs, common_substructure
+            else:
+                return imgs
 
         # Handle single molecule rendering
         else:
@@ -361,10 +378,10 @@ class ChemLibrary:
                 useSVG=True,  # Use SVG rendering for efficiency
             )
 
-        if orient:
-            return img, common_substructure
-        else:
-            return img
+            if orient:
+                return img, common_substructure
+            else:
+                return img
 
 def ClusterFps(fps, cutoff=0.2):
     # adapted from https://github.com/tsudalab/ChemGE/blob/master/results/clustering.py
