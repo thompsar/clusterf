@@ -8,6 +8,7 @@ from holoviews.streams import Selection1D
 import param
 import networkx as nx
 from src.chemistry import ChemLibrary
+from src.carrousel import Carrousel
 
 pn.extension('tabulator', sizing_mode="stretch_width")
 
@@ -23,7 +24,11 @@ TODO LIST:
 - [ ] Cluster hover should provide basic stats about cluster (number of compounds per category, total compounds, etc.)
 - [ ] Subset select should have a drop down menu that shows the subset categories, with color pickers for colorizing the clusters
 - [x] Selection of a cluster(s) draws a grid of compounds, all aligned
-    - [ ] Breaks for larger clusters. Fix this! is there a way to make a carousel of images?
+    - [x] Breaks for larger clusters. Fix this! is there a way to make a carousel of images?
+        - See https://discourse.holoviz.org/t/is-there-any-widget-equivalent-to-a-carousel/3431/3
+        -[ ] BUG: Cluster 155 is getting a color swatch in an empty grid box at the very end. Fix this!!!
+        -[ ] BUG: Switching clusters needs to reset the selected index of the carrosel. Fix this!
+        - [ ] TODO: draw_compounds in chemistry.py doesnt return a list for a single compound, but the carrosel expects a list.
     - [x] Issue: chemistry.py:310: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
         - Dealt with by switching over to SVG, which is a much better solution for several reasons.
 - [ ] Colorize table based on category
@@ -91,7 +96,8 @@ class ClusterF(param.Parameterized):
         self.compound_table.on_click(self.on_click)
         self.cluster_chart = pn.pane.HoloViews(object=None)
         self.cluster_graph = pn.pane.HoloViews(object=None)
-        self.compound_grid = pn.pane.SVG(object=None)
+        # self.compound_grid = pn.pane.SVG(object=None)
+        self.compound_grid = Carrousel()
         self.compound_image = pn.pane.SVG(object=None, width=300, name='Compound Image')
         self.common_substructure = None
 
@@ -108,7 +114,8 @@ class ClusterF(param.Parameterized):
         self.compound_table.value = self.build_table(cluster_set)
         self.selected_compound = ''
         self.compound_image.object = None
-        self.compound_grid.object = None
+        # self.compound_grid.object = None
+        self.compound_grid.svgs=[]
 
     @param.depends('cluster_slider', watch=True)
     def update_realtime(self):
@@ -125,7 +132,8 @@ class ClusterF(param.Parameterized):
         self.visible_columns = ['Compound', 'SMILES', str(self.fine_threshold)]
         self.compound_table.visible = False
         self.compound_image.object = None
-        self.compound_grid.object = None
+        # self.compound_grid.object = None
+        self.compound_grid.svgs = []
         self.cluster_graph.object = None
         self.cluster_chart.object = None
         self.slider_widget.disabled = True
@@ -323,16 +331,20 @@ class ClusterF(param.Parameterized):
 
                 grid_image, self.common_substructure = self.library.draw_compounds(
                     compounds,
+                    mols_per_row=4,
+                    max_rows=3,
                     color_dict=self.color_dict,
                     orient=True,
-                    mols_per_row=4,
                     legend=False,
                 )
-
+                
             else:
                 grid_image = self.library.draw_compounds(compounds, legend=False)
+                # TODO: This is a fix for the fact that the carrosel expects a list of images
+                grid_image = [grid_image]
 
-            self.compound_grid.object = grid_image
+            # self.compound_grid.object = grid_image
+            self.compound_grid.svgs = grid_image
             # clear selected compound
             self.selected_compound = ''
             self.compound_image.object = None
@@ -341,7 +353,8 @@ class ClusterF(param.Parameterized):
             # node has been deselected, clear everything and reset table
             # Note: This can also go below in graph_view? Perhaps here is better
             # because it is more explicit for the action being taken.
-            self.compound_grid.object = None
+            # self.compound_grid.object = None
+            self.compound_grid.svgs = []
             self.compound_image.object = None
             super_cluster = self.library.super_clusters[self.slider_widget.value - 1]
             self.compound_table.value = self.build_table(super_cluster)
@@ -499,7 +512,7 @@ sidebar = pn.Column(
 main = pn.Column(
     pn.Row(
         clusterF.cluster_graph,
-        pn.Column(clusterF.compound_grid, height=700, scroll=True),
+        pn.Column(clusterF.compound_grid.view(), height=700, scroll=True),
         height=700,
     ),
     clusterF.compound_table,
@@ -507,7 +520,8 @@ main = pn.Column(
 )
 
 pn.template.FastListTemplate(
-    title="ChemBridge Compound Viewer",
+    site='ClusterF',
+    title="A ChemBridge Compound Viewer",
     sidebar=sidebar,
     main=main,
 ).servable()
