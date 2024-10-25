@@ -8,7 +8,7 @@ class Carrousel(param.Parameterized):
     # List of SVGs to display
     svgs = param.List(default=[])
     current_index = param.Integer(0)
-    svg_viewer = pn.pane.SVG(object=None)
+    svg_viewer = pn.pane.SVG(object=None,height=600)
     prev_button = param.Action(
         default=lambda x: x.param.trigger('prev_button'), label='◀️'
     )
@@ -36,17 +36,49 @@ class Carrousel(param.Parameterized):
             )
         self.update_carrousel()
 
-    @param.depends('current_index','svgs', watch=True)
+    
+    @param.depends('svgs', watch=True)
     def update_carrousel(self):
         # If the list is empty, hide buttons and show no SVG
         if not self.svgs:
             self.svg_viewer.object = None
             self.buttons.visible = False
         else:
-            # Show the current SVG based on the current index
+            self.param.update(current_index=0)
             svg = self.svgs[self.current_index]
             self.svg_viewer.object = svg
-            self.buttons.visible = True
+            if len(self.svgs) == 1:
+                self.buttons.visible = False
+            else:
+                self.buttons.visible = True
+    
+    
+    @param.depends('current_index', watch=True)
+    def update_index(self):
+        svg = self.svgs[self.current_index]
+        self.svg_viewer.object = svg
+        
+    
+    
+    # @param.depends('current_index','svgs', watch=True)
+    # def update_carrousel(self):
+    #     # If the list is empty, hide buttons and show no SVG
+    #     if not self.svgs:
+    #         self.svg_viewer.object = None
+    #         self.buttons.visible = False
+    #     else:
+    #         # Show the current SVG based on the current index
+    #         try:
+    #             svg = self.svgs[self.current_index]
+    #         except IndexError:
+    #             #svgs object has been updated and current index is out of range
+    #             self.param.update(current_index=0)
+    #             svg = self.svgs[0]
+    #         self.svg_viewer.object = svg
+    #         if len(self.svgs) == 1:
+    #             self.buttons.visible = False
+    #         else:
+    #             self.buttons.visible = True
         
 
     @param.depends('prev_button', watch=True)
