@@ -1,8 +1,8 @@
-src/__pycache__/__init__.cpython-39.pyc
-src/__pycache__/chemistry.cpython-39.pyc
-src/__pycache__/cluster_viewer.cpython-39.pyc
-__pycache__/cluster_viewer.cpython-39.pyc
 compound_libraries/N1477-1.sdf
 compound_libraries/NT0685-2.sdf
 development/
 development/*
+src/__pycache__/
+src/__pycache__/*
+__pycache__/
+__pycache__/*
