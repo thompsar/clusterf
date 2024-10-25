@@ -7,6 +7,7 @@ from holoviews import opts
 from rdkit import Chem
 from rdkit.Chem import MolFromSmiles, AllChem, Draw
 from rdkit.Chem import rdFMCS
+
 # Below needed for some reason to get the draw functions to work
 # even though it is not called. If not imported, draw_compound
 # will throw  AttributeError: 'str' object has no attribute 'data'
@@ -120,7 +121,7 @@ class ChemLibrary:
                     set([fine_compounds[comp] for comp in compound_mapping])
                 )
                 edge_array[cluster, related_clusters] = 1
-        #find rows that only have 1 element
+        # find rows that only have 1 element
         self.singletons = np.where(edge_array.sum(axis=1) == 1)[0]
         # set diagonal to 0
         np.fill_diagonal(edge_array, 0)
@@ -238,7 +239,7 @@ class ChemLibrary:
             warnings.warn(msg)
         return subset
 
-    def draw_compounds(
+    def draw_compound_grid(
         self,
         compound_ids,
         mols_per_row=6,
@@ -271,117 +272,164 @@ class ChemLibrary:
 
         img_size = 300  # Smaller size for better performance in web apps
         chem_info = self.get_compounds(compound_ids)
-        # print(chem_info)
+        # redefine compound_ids below to handle input of bad ID
         compound_ids = chem_info['Compound'].values
-        categories = chem_info['Category'].values
-        mols = [Chem.MolFromSmiles(smiles_str) for smiles_str in chem_info['SMILES']]
-        nmols = len(mols)
-        # Handle multiple molecules in a grid
-        if nmols > 1:
-            
-            if orient:
-                mols, highlight_atoms, common_substructure = orient_mols(
-                    mols, return_pattern=True
-                )
-                print(len(highlight_atoms))
+        all_categories = chem_info['Category'].values
+        all_mols = [
+            Chem.MolFromSmiles(smiles_str) for smiles_str in chem_info['SMILES']
+        ]
 
-                highlight_colors = [
-                    {idx: (86 / 255, 180 / 255, 233 / 255, 0.5) for idx in highlight}
-                    for highlight in highlight_atoms
-                ]
-            else:
-                highlight_atoms = None
-                highlight_colors = None
+        if orient:
+            all_mols, highlight_atoms, common_substructure = orient_mols(
+                all_mols, return_pattern=True
+            )
 
-            ngrids = int(np.ceil(nmols/(mols_per_row*max_rows)))
-            mols_per_grid = mols_per_row * max_rows
-            # slices = [range(i*mols_per_grid,(i+1)*mols_per_grid) for i in range(ngrids)]
-            imgs = []
-            for i in range(ngrids):
-                start = i*mols_per_grid
-                end = (i+1)*mols_per_grid
-                # Render the molecules in SVG format
-                img = Draw.MolsToGridImage(
-                    mols[start:end],
-                    molsPerRow=mols_per_row,
-                    subImgSize=(img_size, img_size),
-                    highlightAtomLists=highlight_atoms[start:end],
-                    highlightAtomColors=highlight_colors[start:end],
-                    legends=[str(compound_id) for compound_id in compound_ids][start:end],
-                    useSVG=True,  # Use SVG rendering for efficiency
-                )
-
-                # add gridlines (make into function later)
-                delimiter = '</rect>\n'
-                head, tail = img.data.split(delimiter)
-                # head, tail = img.split(delimiter)
-                head = head + delimiter
-                std_bg_style = "opacity:1.0;fill:#FFFFFF;stroke:none"
-
-                # note stroke-width is 4 since gridlines are 2 wide
-                # but double up with neighboring cells
-                if transparent:
-                    new_bg_style = "opacity:0.0;fill:none;stroke:black;stroke-width:4"
-                    head = head.replace(std_bg_style, new_bg_style)
-                else:
-                    new_bg_style = "opacity:1.0;fill:#FFFFFF;stroke:black;stroke-width:4"
-                    head = head.replace(std_bg_style, new_bg_style)
-
-                if color_dict is None:
-                    color_dict = {category: 'none' for category in set(categories)}
-                # override color_dict miss to none
-                color_dict['Miss'] = 'none'
-                grid_fill = [
-                    (
-                        f'<rect width="{img_size}" '
-                        f'height="{img_size}" '
-                        f'x="{x}" y="{y}" '
-                        'style="fill:none;'
-                        'fill-opacity:0.3;'
-                        'stroke:black;'
-                        'stroke-width:2;'
-                        'stroke-opacity:1"/>'
-                    )
-                    
-                    for y in range(0, img_size * (len(mols) // mols_per_row+1), img_size)
-                    for x in range(0, img_size * mols_per_row, img_size)
-                ]
-                # below requires the grid_fill be draw row wise as is done above with y,x in for loop
-                # i dont really like this, but its less clunky than trying to cram it in above
-                # find a better way!
-                grid_fill[: len(categories)] = [
-                    line.replace('fill:none', f'fill:{color_dict[category]}')
-                    for category, line in zip(categories, grid_fill[: len(categories)])
-                ]
-                
-
-                grid_fill = '\n'.join(grid_fill)
-                img.data = head + grid_fill + tail
-                # img = head + grid_fill + tail
-                imgs.append(img)
-            if orient:
-                return imgs, common_substructure
-            else:
-                return imgs
-
-        # Handle single molecule rendering
+            highlight_colors = [
+                {idx: (86 / 255, 180 / 255, 233 / 255, 0.5) for idx in highlight}
+                for highlight in highlight_atoms
+            ]
         else:
-            if common_substructure is not None:
-                mols, highlight_atoms = orient_mols(
-                    mols, common_substructure, return_pattern=False
-                )
+            highlight_atoms = None
+            highlight_colors = None
 
+        ngrids = int(np.ceil(len(all_mols) / (mols_per_row * max_rows)))
+        mols_per_grid = mols_per_row * max_rows
+       
+        def raggedify(var, mols_per_grid):
+            if var is None:
+                return [None]*ngrids
+            else:
+                return [
+                    var[i : i + mols_per_grid]
+                    for i in range(0, len(var), mols_per_grid)
+                ]
+
+        vars = [
+            all_mols,
+            compound_ids,
+            highlight_atoms,
+            highlight_colors,
+            all_categories,
+        ]
+
+        
+        vars = map(lambda x: raggedify(x, mols_per_grid), vars)
+        
+        imgs = []
+        for mols, ids, atoms, colors, categories in zip(*vars):
+            # Render the molecules in SVG format
             img = Draw.MolsToGridImage(
                 mols,
-                molsPerRow=1,
+                molsPerRow=mols_per_row,
                 subImgSize=(img_size, img_size),
+                highlightAtomLists=atoms,
+                highlightAtomColors=colors,
+                legends=[str(id) for id in ids],
                 useSVG=True,  # Use SVG rendering for efficiency
             )
 
-            if orient:
-                return img, common_substructure
+            # add gridlines (make into function later)
+            delimiter = '</rect>\n'
+            head, tail = img.data.split(delimiter)
+            # head, tail = img.split(delimiter)
+            head = head + delimiter
+            std_bg_style = "opacity:1.0;fill:#FFFFFF;stroke:none"
+
+            # note stroke-width is 4 since gridlines are 2 wide
+            # but double up with neighboring cells
+            if transparent:
+                new_bg_style = "opacity:0.0;fill:none;stroke:black;stroke-width:4"
+                head = head.replace(std_bg_style, new_bg_style)
             else:
-                return img
+                new_bg_style = "opacity:1.0;fill:#FFFFFF;stroke:black;stroke-width:4"
+                head = head.replace(std_bg_style, new_bg_style)
+
+            if color_dict is None:
+                color_dict = {category: 'none' for category in set(categories)}
+            # override color_dict miss to none
+            color_dict['Miss'] = 'none'
+            grid_fill = [
+                (
+                    f'<rect width="{img_size}" '
+                    f'height="{img_size}" '
+                    f'x="{x}" y="{y}" '
+                    'style="fill:none;'
+                    'fill-opacity:0.3;'
+                    'stroke:black;'
+                    'stroke-width:2;'
+                    'stroke-opacity:1"/>'
+                )
+                for y in range(0, img_size * (len(mols) // mols_per_row + 1), img_size)
+                for x in range(0, img_size * mols_per_row, img_size)
+            ]
+            # below requires the grid_fill be draw row wise as is done above with y,x in for loop
+            # i dont really like this, but its less clunky than trying to cram it in above
+            # find a better way!
+            grid_fill[: len(categories)] = [
+                line.replace('fill:none', f'fill:{color_dict[category]}')
+                for category, line in zip(categories, grid_fill[: len(categories)])
+            ]
+
+            grid_fill = '\n'.join(grid_fill)
+            img.data = head + grid_fill + tail
+            # img = head + grid_fill + tail
+            imgs.append(img)
+        if orient:
+            return imgs, common_substructure
+        else:
+            return imgs, None
+
+
+    def draw_compound(
+        self,
+        compound_id,
+        common_substructure=None,
+        orient=False,
+        transparent=False,
+        legend=True,
+    ):
+        """Draws Chembridge compound
+
+        Parameters
+        ----------
+        compound_ids : list of str, int, or single str, int
+            Chembridge compound IDs
+        mols_per_row : int, optional
+            number of molecules drawn per row, by default 6
+        max_rows : int, optional
+            maximum number of rows, by default 3
+        transparent : bool, optional
+            draw grid with transparent background, by default False
+        legend : bool, optional
+            include compound id as legend, by default True
+
+        Returns
+        -------
+        image : SVG of compound or compounds in grid
+        """
+
+        img_size = 300  # Smaller size for better performance in web apps
+        chem_info = self.get_compounds(compound_id)
+        mols = [Chem.MolFromSmiles(smiles_str) for smiles_str in chem_info['SMILES']]
+
+        if common_substructure is not None:
+            mols, highlight_atoms = orient_mols(
+                mols, common_substructure, return_pattern=False
+            )
+        # There is a reason I'm using grid image below but I don't remember why
+        # perhaps due to useSVG?
+        img = Draw.MolsToGridImage(
+            mols,
+            molsPerRow=1,
+            subImgSize=(img_size, img_size),
+            useSVG=True,  # Use SVG rendering for efficiency
+        )
+
+        if orient:
+            return img, common_substructure
+        else:
+            return img
+
 
 def ClusterFps(fps, cutoff=0.2):
     # adapted from https://github.com/tsudalab/ChemGE/blob/master/results/clustering.py
@@ -412,30 +460,13 @@ def orient_mols(mols, common_substructure=None, return_pattern=False):
     if common_substructure is None:
         mcs_result = rdFMCS.FindMCS(mols, params)
         common_substructure = Chem.MolFromSmarts(mcs_result.smartsString)
-   
-    # New but does wierd stuff to inter cluster molecule drawing (broken molecules)
+
     # Ensure 2D coordinates for the common substructure
     AllChem.Compute2DCoords(common_substructure)
     # Align molecules to the common substructure
     for mol in mols:
         AllChem.Compute2DCoords(mol)  # Ensure the molecule has 2D coordinates
         AllChem.GenerateDepictionMatching2DStructure(mol, common_substructure)
-
-    # #older code
-    # # does a better job aligning molecules when comparing inter clusters,
-    # # but it drops some atoms in the process, see clusters 3950,6353, 14072 from CNS
-    # matchVs= [x.GetSubstructMatch(common_substructure) for x in mols]
-    # AllChem.Compute2DCoords(mols[0])
-    # coords = [mols[0].GetConformer().GetAtomPosition(x) for x in matchVs[0]]
-    # coords2D = [Geometry.Point2D(pt.x,pt.y) for pt in coords]
-
-    # # now generate coords for the other molecules using that reference:
-    # for molIdx in range(1,len(mols)):
-    #     mol = mols[molIdx]
-    #     coordDict={}
-    #     for i,coord in enumerate(coords2D):
-    #         coordDict[matchVs[molIdx][i]] = coord
-    #     AllChem.Compute2DCoords(mol,coordMap=coordDict)
 
     # Highlight atoms involved in the MCS
     highlight_atoms = [mol.GetSubstructMatch(common_substructure) for mol in mols]
