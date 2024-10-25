@@ -19,6 +19,7 @@ TODO LIST:
 - [ ] Add plots accoriding to values in the table (e.g. MW vs LogP)
     - [ ] Plot values should be highlighted to to reveal compounds of interest. Interesting patterns may appear.
 - [x] Convert compound ID text box into "compound search" box, have that adjust to appropraite cluster/graph
+    - [ ] Currently only seeks super cluster. Add selection of exact cluster within super cluster.
 - [ ] Add a "reset" button to reset the graph to the original view
 - [x] Results of reclustering should be saved to the CSV of the subset file
 - [ ] Cluster hover should provide basic stats about cluster (number of compounds per category, total compounds, etc.)
@@ -26,9 +27,9 @@ TODO LIST:
 - [x] Selection of a cluster(s) draws a grid of compounds, all aligned
     - [x] Breaks for larger clusters. Fix this! is there a way to make a carousel of images?
         - See https://discourse.holoviz.org/t/is-there-any-widget-equivalent-to-a-carousel/3431/3
-        -[ ] BUG: Cluster 155 is getting a color swatch in an empty grid box at the very end. Fix this!!!
-        -[ ] BUG: Switching clusters needs to reset the selected index of the carrosel. Fix this!
-        - [ ] TODO: draw_compounds in chemistry.py doesnt return a list for a single compound, but the carrosel expects a list.
+        -[x] BUG: Cluster 155 is getting a color swatch in an empty grid box at the very end. Fix this!!!
+        -[x] BUG: Switching clusters needs to reset the selected index of the carrosel. Fix this!
+        - [x] TODO: draw_compounds in chemistry.py doesnt return a list for a single compound, but the carrosel expects a list.
     - [x] Issue: chemistry.py:310: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
         - Dealt with by switching over to SVG, which is a much better solution for several reasons.
 - [ ] Colorize table based on category
@@ -38,12 +39,17 @@ TODO LIST:
 - [ ] Clique highlighing? Common structure?
     - [ ] Would be really cool to have a philogenetic tree of the variations in chemical strucutre from the core structure
 - [ ] Size nodes according, roughly to the number of compounds in the cluster? Or perhaps different shape or outline for singletons?
-- [ ] Pull rendering of cluster stats chart out of chemistry.py and into here
-- [ ] BUG: deselecting a node does not reset the compound grid or table
+- [ ] Pull rendering of cluster stats chart out of chemistry.py and into here (or make own class)
+    - [ ] Label axes accordingly
+    - [ ] Convert to a bar chart?
+    - [ ] Make clickable to select super cluster
+    - [ ] Colorize based on category
+- [x] BUG: deselecting a node does not reset the compound grid or table
 - [ ] BUG: ? Where is cluster 5030? It is not a singleton but it is not in the cluster charts.
     - 5030 gets tossed out during building of graph due to the fact that none of the compounds included match with other clusters under
         the conditions ive mostly tested (0.2, 0.4). Modifying fingerprinting scheme may help, but hasn't worked yet.
     - [ ] FIX: Re-introduce pruned clusters to graph so that Compound Search works (fails currently). Do this by checking to see if they contain any compounds of interest!
+-[ ] Add a way to triage compounds in the table (radio boxes that persist through selections, for example).
 
 '''
 
