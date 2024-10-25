@@ -244,10 +244,9 @@ class ClusterF(param.Parameterized):
 
     def on_click(self, event):
         compound = self.compound_table.value.loc[event.row, 'Compound']
-        image = self.library.draw_compounds(
+        image = self.library.draw_compound(
             compound,
             common_substructure=self.common_substructure,
-            color_dict=self.color_dict,
             legend=False,
         )
         self.selected_compound = '### Compound ID: ' + compound
@@ -317,33 +316,32 @@ class ClusterF(param.Parameterized):
         if indices:
             self.selected_nodes = [
                 self.node_labels[i] for i in indices
-            ]  # Get the label of the selected node
-            # self.text_box.object = (
-            #     f"Selected node: {', '.join([str(i) for i in self.selected_nodes])}"
-            # )
+            ]  
+            
             # update table
             new_table = self.build_table(self.selected_nodes)
             self.compound_table.value = new_table
             # draw grid
             compounds = new_table['Compound'].values
-            # self.text_box.object = f"compounds: {', '.join([i for i in compounds])}"
+
             if len(compounds) > 1:
-
-                grid_image, self.common_substructure = self.library.draw_compounds(
-                    compounds,
-                    mols_per_row=4,
-                    max_rows=3,
-                    color_dict=self.color_dict,
-                    orient=True,
-                    legend=False,
-                )
-                
+                mols_per_row = 4
+                max_rows = 3
+                orient = True
             else:
-                grid_image = self.library.draw_compounds(compounds, legend=False)
-                # TODO: This is a fix for the fact that the carrosel expects a list of images
-                grid_image = [grid_image]
+                mols_per_row = 4
+                max_rows = 1
+                orient = False
 
-            # self.compound_grid.object = grid_image
+            grid_image, self.common_substructure = self.library.draw_compound_grid(
+                compounds,
+                mols_per_row=mols_per_row,
+                max_rows=max_rows,
+                color_dict=self.color_dict,
+                orient=orient,
+                legend=False, #note this actually does nothing right now
+            )
+                
             self.compound_grid.svgs = grid_image
             # clear selected compound
             self.selected_compound = ''
