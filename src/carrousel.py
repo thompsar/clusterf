@@ -6,7 +6,7 @@ pn.extension()
 
 class Carrousel(param.Parameterized):
     # List of SVGs to display
-    svgs = param.List(default=[])
+    svgs = param.List([])
     current_index = param.Integer(0)
     svg_viewer = pn.pane.SVG(object=None, height=600)
     prev_button = param.Action(
@@ -44,36 +44,37 @@ class Carrousel(param.Parameterized):
             self.svg_viewer.object = None
             self.buttons.visible = False
         else:
-            self.param.update(current_index=0)
-            svg = self.svgs[self.current_index]
-            self.svg_viewer.object = svg
+            self.beginning_carrousel()
+            # NOTE: below needs to be explicitly called since calling begining_carrousel
+            # may not necessarily trigger the update_image if the index was already 0.
+            self.update_image()
             if len(self.svgs) == 1:
                 self.buttons.visible = False
             else:
                 self.buttons.visible = True
 
     @param.depends('current_index', watch=True)
-    def update_index(self):
+    def update_image(self):
         svg = self.svgs[self.current_index]
         self.svg_viewer.object = svg
 
     @param.depends('prev_button', watch=True)
     def prev_image(self):
         if self.current_index > 0:
-            self.param.update(current_index=self.current_index - 1)
+            self.current_index -= 1
 
     @param.depends('next_button', watch=True)
     def next_image(self):
         if self.current_index < len(self.svgs) - 1:
-            self.param.update(current_index=self.current_index + 1)
+            self.current_index += 1
 
     @param.depends('beginning_button', watch=True)
     def beginning_carrousel(self):
-        self.param.update(current_index=0)
+        self.current_index = 0
 
     @param.depends('end_button', watch=True)
     def end_carrousel(self):
-        self.param.update(current_index=len(self.svgs) - 1)
+        self.current_index = len(self.svgs) - 1
 
     def view(self):
         return pn.Column(
