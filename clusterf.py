@@ -19,7 +19,7 @@ TODO LIST:
 - [ ] Add plots accoriding to values in the table (e.g. MW vs LogP)
     - [ ] Plot values should be highlighted to to reveal compounds of interest. Interesting patterns may appear.
 - [x] Convert compound ID text box into "compound search" box, have that adjust to appropraite cluster/graph
-    - [ ] Currently only seeks super cluster. Add selection of exact cluster within super cluster.
+    - [x] Currently only seeks super cluster. Add selection of exact cluster within super cluster.
 - [ ] Add a "reset" button to reset the graph to the original view
 - [x] Results of reclustering should be saved to the CSV of the subset file
 - [ ] Cluster hover should provide basic stats about cluster (number of compounds per category, total compounds, etc.)
@@ -30,7 +30,9 @@ TODO LIST:
         -[x] BUG: Cluster 155 is getting a color swatch in an empty grid box at the very end. Fix this!!!
         -[x] BUG: Switching clusters needs to reset the selected index of the carrosel. Fix this!
         - [x] TODO: draw_compounds in chemistry.py doesnt return a list for a single compound, but the carrosel expects a list.
-    - [x] Issue: chemistry.py:310: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+    - [x] Issue: chemistry.py:310: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface 
+          (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, 
+          see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
         - Dealt with by switching over to SVG, which is a much better solution for several reasons.
 - [ ] Colorize table based on category
 - [ ] Orienting the compounds in cluster 1772 creates some atom collisions and weird orientations. Fix this.
@@ -236,6 +238,12 @@ class ClusterF(param.Parameterized):
                 #find the index of the cluster containing the compound, update the selection
                 index = list(np.argwhere(self.node_labels == cluster)[0])
                 self.selection.update(index=index)
+                #find the index of the compound in the table, update the selection
+                index = self.compound_table.value[self.compound_table.value['Compound'] == str(compound)].index[0]
+                self.compound_table.selection = [int(index)] #highlights the row in table, but doesnt click
+                event = MockEvent(row=int(index))
+                #simulate click on table row
+                self.on_click(event)
 
             except IndexError:
                 # TODO: Should return default looking text, not input style text
@@ -466,8 +474,9 @@ class ClusterF(param.Parameterized):
 
 
 class MockEvent:
-    def __init__(self, new):
+    def __init__(self, new=None, row=None):
         self.new = new
+        self.row = row
 
 
 clusterF = ClusterF()
