@@ -102,7 +102,6 @@ class ClusterF(param.Parameterized):
         self.compound_table.on_click(self.on_click)
         self.cluster_chart = pn.pane.HoloViews(object=None)
         self.cluster_graph = pn.pane.HoloViews(object=None)
-        # self.compound_grid = pn.pane.SVG(object=None)
         self.compound_grid = Carrousel()
         self.compound_image = pn.pane.SVG(object=None, width=300, name='Compound Image')
         self.common_substructure = None
@@ -120,7 +119,6 @@ class ClusterF(param.Parameterized):
         self.compound_table.value = self.build_table(cluster_set)
         self.selected_compound = ''
         self.compound_image.object = None
-        # self.compound_grid.object = None
         self.compound_grid.svgs=[]
 
     @param.depends('cluster_slider', watch=True)
@@ -138,7 +136,6 @@ class ClusterF(param.Parameterized):
         self.visible_columns = ['Compound', 'SMILES', str(self.fine_threshold)]
         self.compound_table.visible = False
         self.compound_image.object = None
-        # self.compound_grid.object = None
         self.compound_grid.svgs = []
         self.cluster_graph.object = None
         self.cluster_chart.object = None
@@ -208,7 +205,6 @@ class ClusterF(param.Parameterized):
     # below currently does nothing!!!
     @param.depends('selected_cluster', watch=True)
     def update_table(self):
-        print('selected cluster:', self.selected_cluster)
         nodes = self.library.nodes.data.loc[self.selected_cluster, 'index'].values
         new_df = self.library.df
         new_df = new_df[new_df[self.fine_threshold].isin(nodes)][
@@ -237,6 +233,9 @@ class ClusterF(param.Parameterized):
                 # TODO: Below seems like a janky fix...but it works.
                 event = MockEvent(super_cluster)
                 self.update_throttled(event)
+                #find the index of the cluster containing the compound, update the selection
+                index = list(np.argwhere(self.node_labels == cluster)[0])
+                self.selection.update(index=index)
 
             except IndexError:
                 # TODO: Should return default looking text, not input style text
