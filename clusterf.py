@@ -57,10 +57,10 @@ TODO LIST:
 
 
 class ClusterF(param.Parameterized):
-    libraries = ['cns']  # 'diverset': ChemLibrary('diverset')}
+    libraries = ['cns','cns_kinase']  # 'diverset': ChemLibrary('diverset')}
 
     # Widgets
-    lib_select = param.Selector(objects=libraries, default=libraries[0])
+    lib_select = param.Selector(objects=libraries, default=libraries[1])
     fine_threshold = param.Number(0.2)
     coarse_threshold = param.Number(0.4)
     subset_select = param.FileSelector(path=os.path.join('compound_subsets', '*.csv*'))
@@ -222,28 +222,72 @@ class ClusterF(param.Parameterized):
             # NOTE: cheesy way to force search for single compounds
             # not great for usability FIX.
             compound = [int(comp) for comp in compounds][0]
+            print(compound)
             try:
                 cluster = self.library.get_compounds(compound)[
                     str(self.fine_threshold)
                 ].values[0]
+                # super_cluster = [
+                #     idx
+                #     for idx, super_cluster in enumerate(self.library.super_clusters)
+                #     if cluster in super_cluster
+                # ][0] + 1
                 super_cluster = [
                     idx
                     for idx, super_cluster in enumerate(self.library.super_clusters)
                     if cluster in super_cluster
-                ][0] + 1
-                self.slider_widget.value = super_cluster
-                # TODO: Below seems like a janky fix...but it works.
-                event = MockEvent(super_cluster)
-                self.update_throttled(event)
-                #find the index of the cluster containing the compound, update the selection
-                index = list(np.argwhere(self.node_labels == cluster)[0])
-                self.selection.update(index=index)
-                #find the index of the compound in the table, update the selection
-                index = self.compound_table.value[self.compound_table.value['Compound'] == str(compound)].index[0]
-                self.compound_table.selection = [int(index)] #highlights the row in table, but doesnt click
-                event = MockEvent(row=int(index))
-                #simulate click on table row
-                self.on_click(event)
+                ]
+                if super_cluster:
+                    super_cluster = super_cluster[0] + 1
+                    self.slider_widget.value = super_cluster
+                    # TODO: Below seems like a janky fix...but it works.
+                    event = MockEvent(super_cluster)
+                    self.update_throttled(event)
+                    #find the index of the cluster containing the compound, update the selection
+                    index = list(np.argwhere(self.node_labels == cluster)[0])
+                    self.selection.update(index=index)
+                    #find the index of the compound in the table, update the selection
+                    index = self.compound_table.value[self.compound_table.value['Compound'] == str(compound)].index[0]
+                    self.compound_table.selection = [int(index)] #highlights the row in table, but doesnt click
+                    event = MockEvent(row=int(index))
+                    #simulate click on table row
+                    self.on_click(event)
+                else:
+                    #TODO: Everything below here is a temporary fix to handle compounds that are in the hit list
+                    # but do not form super clusters (e.g. singletons, orphans, etc.)
+                    # note that the display of the graph and slider will not change in this case
+                    #up above  there was no if statement
+                    #NOTE: --autoreload breaks displaying on svg file for some reason
+                    
+                    #update table
+                    new_table = self.build_table(cluster)
+                    self.compound_table.value = new_table
+                    self.selected_nodes = []
+
+                    #code below was taken from update_selection to allow drawing of grid
+                    compounds = new_table['Compound'].values
+                    print(compounds)
+
+                    if len(compounds) > 1:
+                        mols_per_row = 4
+                        max_rows = 3
+                        orient = True
+                    else:
+                        mols_per_row = 4
+                        max_rows = 1
+                        orient = False
+
+                    grid_image, self.common_substructure = self.library.draw_compound_grid(
+                        compounds,
+                        mols_per_row=mols_per_row,
+                        max_rows=max_rows,
+                        color_dict=self.color_dict,
+                        orient=orient,
+                        legend=False, #note this actually does nothing right now
+                    )
+                        
+                    self.compound_grid.svgs = grid_image
+
 
             except IndexError:
                 # TODO: Should return default looking text, not input style text
@@ -439,8 +483,21 @@ class ClusterF(param.Parameterized):
         color_dict = {
             'Hit': '#%02x%02x%02x' % cb_colors[2],
             'Fluorescent': '#%02x%02x%02x' % cb_colors[6],
+            'Interfering': '#%02x%02x%02x' % cb_colors[6],
             'Questionable': '#%02x%02x%02x' % cb_colors[3],
             'Miss': '#%02x%02x%02x' % cb_colors[1],
+            'Marzena': '#%02x%02x%02x' % cb_colors[1],
+            'Rejected': '#%02x%02x%02x' % cb_colors[1],
+            'RyR2': '#%02x%02x%02x' % cb_colors[0],
+            'RyR1': '#%02x%02x%02x' % cb_colors[4],
+            'RyR1/RyR2': '#%02x%02x%02x' % cb_colors[3],
+            'Common Interfering': '#%02x%02x%02x' % cb_colors[6],
+            'RyR1 Interfering': '#%02x%02x%02x' % cb_colors[6],
+            'RyR2 Interfering': '#%02x%02x%02x' % cb_colors[6],
+            'RyR1 Questionable': '#%02x%02x%02x' % cb_colors[3],
+            'RyR1/RyR2 Questionable': '#%02x%02x%02x' % cb_colors[3],
+
+    
         }
 
         category_df = self.library.df.merge(
@@ -456,15 +513,19 @@ class ClusterF(param.Parameterized):
 
         # Define a function to determine the color based on categories
         def determine_color(categories):
-            if 'Hit' in categories:
-                return color_dict['Hit']
-            elif 'Fluorescent' in categories:
-                return color_dict['Fluorescent']
-            elif 'Questionable' in categories:
-                return color_dict['Questionable']
-            else:
-                return color_dict['Miss']
-
+            #doing this for ryr screen change if statement back to categories
+            try: 
+                cats = [bit for item in categories for bit in item.split()]
+                if 'Hit' in cats:
+                    return color_dict['Hit']
+                elif 'Fluorescent' in cats:
+                    return color_dict['Fluorescent']
+                elif 'Questionable' in cats:
+                    return color_dict['Questionable']
+                else:
+                    return color_dict['Miss']
+            except AttributeError:
+                return color_dict['Miss']  # Default color if no categories found
         # Apply the color determination function to each cluster
         self.cluster_color_map = {
             cluster: determine_color(categories)
