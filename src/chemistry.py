@@ -475,3 +475,6 @@ def orient_mols(mols, common_substructure=None, return_pattern=False):
         return mols, highlight_atoms, common_substructure
     else:
         return mols, highlight_atoms
+    
+    #References:
+    # (1) https://projects.volkamerlab.org/teachopencadd/talktorials/T005_compound_clustering.html
