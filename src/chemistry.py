@@ -318,13 +318,14 @@ class ChemLibrary:
         imgs = []
         for mols, ids, atoms, colors, categories in zip(*vars):
             # Render the molecules in SVG format
+            #legend below used to be [str(id) for id in ids],
             img = Draw.MolsToGridImage(
                 mols,
                 molsPerRow=mols_per_row,
                 subImgSize=(img_size, img_size),
                 highlightAtomLists=atoms,
                 highlightAtomColors=colors,
-                legends=[str(id) for id in ids],
+                legends=[str(id)+'\n\n'+str(cat) if cat != "Miss" else str(id) for id, cat in zip(ids, categories)],
                 useSVG=True,  # Use SVG rendering for efficiency
             )
 
