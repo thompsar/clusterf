@@ -78,10 +78,34 @@ class ClusterF(param.Parameterized):
     save_button = param.Action(
         lambda x: x.param.trigger('save_button'), label='Save Spreadsheet'
     )
+    
+    # Dynamic color parameters will be added programmatically
+    categories = param.List(default=[])
+    color_widgets_visible = param.Boolean(default=False)
 
     def __init__(self, **params):
         super().__init__(**params)
+        
+        # Color blind friendly palette - based on Wong 2011 palette
+        self.default_colors = [
+            '#E69F00',  # Orange
+            '#56B4E9',  # Sky Blue
+            '#009E73',  # Bluish Green
+            '#F0E442',  # Yellow
+            '#0072B2',  # Blue
+            '#D55E00',  # Vermillion
+            '#CC79A7',  # Reddish Purple
+            '#FFB6C1',  # Light Pink
+            '#98FB98',  # Pale Green
+            '#87CEEB',  # Sky Blue
+            '#DDA0DD',  # Plum
+            '#F0E68C',  # Khaki
+            '#FF6347',  # Tomato
+        ]
+        
         self.library = ChemLibrary(self.lib_select)
+        self.color_widgets = {}
+        self.color_collapse = None
         self.visible_columns = ['Compound', 'SMILES', str(self.fine_threshold)]
         self.compound_table = pn.widgets.Tabulator(
             self.library.df[self.visible_columns],
@@ -121,7 +145,7 @@ class ClusterF(param.Parameterized):
         self.compound_table.value = self.build_table(cluster_set)
         self.selected_compound = ''
         self.compound_image.object = None
-        self.compound_grid.svgs=[]
+        # self.compound_grid.svgs=[]
 
     @param.depends('cluster_slider', watch=True)
     def update_realtime(self):
@@ -157,6 +181,14 @@ class ClusterF(param.Parameterized):
         # BUG: this only works if there are multiple csv files in the directory
         # fixing temporarily with if hasattr below in recluster_library
         self.library.load_subset(self.subset_select)
+        
+        # Create color pickers for categories found in the subset
+        if hasattr(self.library, 'subset_df') and 'Category' in self.library.subset_df.columns:
+            unique_categories = self.library.subset_df['Category'].dropna().unique()
+            
+            self.categories = sorted(unique_categories)
+            self.create_color_widgets(self.categories)
+            self.color_widgets_visible = True
 
     @param.depends('recluster_button', watch=True)
     def recluster_library(self):
@@ -222,7 +254,6 @@ class ClusterF(param.Parameterized):
             # NOTE: cheesy way to force search for single compounds
             # not great for usability FIX.
             compound = [int(comp) for comp in compounds][0]
-            print(compound)
             try:
                 cluster = self.library.get_compounds(compound)[
                     str(self.fine_threshold)
@@ -266,7 +297,6 @@ class ClusterF(param.Parameterized):
 
                     #code below was taken from update_selection to allow drawing of grid
                     compounds = new_table['Compound'].values
-                    print(compounds)
 
                     if len(compounds) > 1:
                         mols_per_row = 4
@@ -364,6 +394,9 @@ class ClusterF(param.Parameterized):
 
         # Watch for node selection changes
         self.selection.param.watch(self.update_selection, 'index')
+
+        # Select all nodes by default
+        self.selection.update(index=list(range(len(self.node_labels))))
 
     def update_selection(self, event):
         """Update the graph plot, compound plots and table when a node is selected."""
@@ -468,38 +501,51 @@ class ClusterF(param.Parameterized):
             self.cluster_graph.object = self.initial_edges * self.points * self.labels
 
     def colorize_clusters(self):
-        # Define color palette
-        cb_colors = [
-            (230, 159, 0),
-            (86, 180, 233),
-            (0, 158, 115),
-            (240, 228, 66),
-            (0, 114, 178),
-            (213, 94, 0),
-            (204, 121, 167),
-        ]
-
-        # Convert RGB tuples to hex
-        color_dict = {
-            'Hit': '#%02x%02x%02x' % cb_colors[2],
-            'Fluorescent': '#%02x%02x%02x' % cb_colors[6],
-            'Interfering': '#%02x%02x%02x' % cb_colors[6],
-            'Questionable': '#%02x%02x%02x' % cb_colors[3],
-            'Miss': '#%02x%02x%02x' % cb_colors[1],
-            'Marzena': '#%02x%02x%02x' % cb_colors[1],
-            'Rejected': '#%02x%02x%02x' % cb_colors[1],
-            'RyR2': '#%02x%02x%02x' % cb_colors[0],
-            'RyR1': '#%02x%02x%02x' % cb_colors[4],
-            'RyR1/RyR2': '#%02x%02x%02x' % cb_colors[3],
-            'Common Interfering': '#%02x%02x%02x' % cb_colors[6],
-            'RyR1 Interfering': '#%02x%02x%02x' % cb_colors[6],
-            'RyR2 Interfering': '#%02x%02x%02x' % cb_colors[6],
-            'RyR1 Questionable': '#%02x%02x%02x' % cb_colors[3],
-            'RyR1/RyR2 Questionable': '#%02x%02x%02x' % cb_colors[3],
-
+        self.update_cluster_colors()
+        #TODO: update grid colors
     
-        }
+        
 
+    def create_color_widgets(self, categories):
+        """Create color picker widgets for each category."""
+        self.color_widgets = {}
+        
+        for i, category in enumerate(categories):
+            # Assign default color from palette
+            default_color = self.default_colors[i % len(self.default_colors)]
+            
+            # Create color picker widget
+            color_widget = pn.widgets.ColorPicker(
+                name=category,
+                value=default_color,
+                width=120,
+                height=50,
+                margin = (5,10)
+            )
+            
+            # Watch for color changes
+            color_widget.param.watch(self.on_color_change, 'value')
+            self.color_widgets[category] = color_widget
+    
+    def on_color_change(self, event):
+        """Handle color picker changes and update visualization."""
+        if hasattr(self, 'library') and hasattr(self.library, 'subset_df'):
+            self.update_cluster_colors()
+            if hasattr(self, 'cluster_color_map'):
+                self.refresh_visualizations()
+    
+    def update_cluster_colors(self):
+        """Update cluster colors based on current color picker values."""
+        if not hasattr(self.library, 'subset_df'):
+            return
+            
+        # Create color dictionary from current widget values
+        self.color_dict = {
+            category: widget.value 
+            for category, widget in self.color_widgets.items()
+        }
+        
+        # Rebuild cluster color mapping
         category_df = self.library.df.merge(
             self.library.subset_df[['Compound', 'Category']], on='Compound', how='outer'
         )
@@ -507,32 +553,79 @@ class ClusterF(param.Parameterized):
 
         # Create a mapping of clusters to their categories
         cluster_category_map = category_df.groupby(fine_threshold)['Category'].apply(
-            lambda x: set(x)
+            lambda x: list(set(x))
         )
         self.cluster_category_map = cluster_category_map
 
-        # Define a function to determine the color based on categories
-        def determine_color(categories):
-            #doing this for ryr screen change if statement back to categories
-            try: 
-                cats = [bit for item in categories for bit in item.split()]
-                if 'Hit' in cats:
-                    return color_dict['Hit']
-                elif 'Fluorescent' in cats:
-                    return color_dict['Fluorescent']
-                elif 'Questionable' in cats:
-                    return color_dict['Questionable']
-                else:
-                    return color_dict['Miss']
-            except AttributeError:
-                return color_dict['Miss']  # Default color if no categories found
         # Apply the color determination function to each cluster
         self.cluster_color_map = {
-            cluster: determine_color(categories)
+            cluster: self.determine_cluster_color(categories)
             for cluster, categories in cluster_category_map.items()
         }
-        self.color_dict = color_dict
 
+    
+    def determine_cluster_color(self, categories):
+        """Determine cluster color based on priority of categories."""
+        try:
+            priority_order = ['Hit', 'Fluorescent', 'Interfering', 'Questionable', 'Miss']
+            
+            # Find the highest priority category
+            for priority_cat in priority_order:
+                loc = np.argwhere([priority_cat in str(cat) for cat in categories])
+                if loc.size > 0:
+                    return self.color_dict.get(categories[loc[0,0]], "#999999")                    
+            # Default fallback color
+            return '#999999'
+            
+        except (AttributeError, TypeError):
+            return '#999999'  # Default color if no categories found
+    
+    def refresh_visualizations(self):
+        """Refresh graph and other visualizations with new colors."""
+        if hasattr(self, 'G') and hasattr(self, 'cluster_color_map'):
+            # Update graph colors
+            cmap = [self.cluster_color_map.get(node, '#999999') for node in self.node_labels]
+            
+            # Update points data
+            data = pd.DataFrame({
+                'x': self.node_positions[:, 0],
+                'y': self.node_positions[:, 1],
+                'color': cmap,
+            })
+            
+            # Recreate points with new colors
+            self.points = hv.Points(data, ['x', 'y']).opts(
+                size=15,
+                width=800,
+                height=700,
+                xaxis=None,
+                yaxis=None,
+                color='color',
+                tools=['tap', 'box_select', 'lasso_select'],
+                active_tools=['tap'],
+            )
+            
+            # Update selection source
+            self.selection.source = self.points
+            
+            # Refresh the graph view
+            self.graph_view()
+    
+    def get_color_widgets_panel(self):
+        """Create a collapsible panel containing all color widgets."""
+        if not self.color_widgets:
+            return pn.pane.Markdown("*No categories loaded. Load a subset file first.*")
+        
+        # Create rows of color widgets (2 per row for better layout)
+        widget_rows = []
+        widgets_list = list(self.color_widgets.values())
+        
+        for i in range(0, len(widgets_list), 2):
+            row_widgets = widgets_list[i:i+2]
+            widget_rows.append(pn.Row(*row_widgets))
+        
+        return pn.Column(*widget_rows, margin=(10, 5))
+        
 
 class MockEvent:
     def __init__(self, new=None, row=None):
@@ -560,6 +653,14 @@ sidebar = pn.Column(
     ),
     clusterF.cluster_chart,
     clusterF.slider_widget,
+    # Color picker controls in a collapsible widget
+    pn.Card(
+        clusterF.get_color_widgets_panel,
+        title="Category Colors",
+        collapsed=True,
+        visible=pn.bind(lambda x: x, clusterF.param.color_widgets_visible),
+        margin=(10, 5),
+    ),
     pn.Param(
         clusterF.param,
         parameters=['compound_input'],
