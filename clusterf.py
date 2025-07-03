@@ -57,9 +57,9 @@ TODO LIST:
 
 def category_sort_key(category):
                 category_str = str(category).lower()
-                if 'hit' in category_str:
+                if 'hit' in category_str and '(nr)' not in category_str and 'questionable' not in category_str:
                     return (0, category)  # Highest priority
-                elif 'questionable' in category_str:
+                elif '(nr)' in category_str or 'questionable' in category_str:
                     return (1, category)  # Second priority
                 elif 'interfering' in category_str:
                     return (2, category)  # Third priority
@@ -577,7 +577,7 @@ class ClusterF(param.Parameterized):
                 {
                     "Category": all_categories,
                     "Count": [category_counts.get(cat, 0) for cat in all_categories],
-                    "%Total Comps": [
+                    "%Total": [
                         str(int(np.round(
                             100 * category_counts.get(cat, 0) / len(cluster_compounds)
                         )))+'%'
@@ -594,7 +594,7 @@ class ClusterF(param.Parameterized):
             hist_data["Color"] = colors
             # Create HoloViews bar chart
             bars = hv.Bars(
-                hist_data, ["Category"], ["Count", "%Total Comps", "Color"]
+                hist_data, ["Category"], ["Count", "%Total", "Color"]
             ).opts(
                 color="Color",
                 width=800,
@@ -664,7 +664,7 @@ class ClusterF(param.Parameterized):
 
         # Rebuild cluster color mapping
         category_df = self.library.df.merge(
-            self.library.subset_df[["Compound", "Category"]], on="Compound", how="outer"
+            self.library.subset_df[["Compound", "Category"]], on="Compound", how="left"
         )
         fine_threshold = str(self.fine_threshold)
 
