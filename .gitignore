@@ -12,3 +12,7 @@ compound_libraries/kinaselib.csv
 .gitignore
 compound_libraries/Selleck Library Product Manual-384well.pdf
 compound_subsets/*
+compound_libraries/cns_kinase.csv
+compound_libraries/L1300-Z394273-100uL_provided_Selleck_maps.xlsx
+.gitignore
+compound_libraries/N1477-2.sdf
