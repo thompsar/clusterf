@@ -144,6 +144,7 @@ class ClusterF(param.Parameterized):
         self.category_histogram = pn.pane.HoloViews(
             object=None, sizing_mode="stretch_width"
         )
+        self.histogram_selection = None  # Will be initialized when histogram is created
         self.common_substructure = None
 
     # Update graph view and table after slider release
@@ -475,6 +476,71 @@ class ClusterF(param.Parameterized):
             self.compound_table.value = self.build_table(super_cluster)
             self.selected_nodes = []
 
+    def on_histogram_click(self, event):
+        """Handle clicks on histogram bars to select all subclusters with compounds of that category."""
+        if not event.new or not hasattr(self, "library"):
+            return
+        
+        try:
+            # Get the index of the clicked bar
+            print(event)
+            clicked_index = event.new[0] if event.new else None
+            print(clicked_index)
+            if clicked_index is None:
+                return
+            
+            # Get all available categories (sorted same way as histogram)
+            all_categories = (
+                list(self.color_widgets.keys()) if self.color_widgets else []
+            )
+            all_categories = sorted(all_categories, key=category_sort_key)
+            
+            if clicked_index >= len(all_categories):
+                return
+                
+            # Get the clicked category
+            clicked_category = all_categories[clicked_index]
+            
+            # Get current super cluster
+            current_super_cluster = self.library.super_clusters[
+                self.slider_widget.value - 1
+            ]
+            
+            # Find all compounds in current super cluster with the clicked category
+            cluster_compounds = self.library.df[
+                self.library.df[str(self.fine_threshold)].isin(current_super_cluster)
+            ]["Compound"].tolist()
+            
+            # Get compounds of the clicked category
+            category_compounds = self.library.subset_df[
+                (self.library.subset_df["Compound"].isin(cluster_compounds)) &
+                (self.library.subset_df["Category"] == clicked_category)
+            ]["Compound"].tolist()
+            
+            if not category_compounds:
+                return
+            
+            # Find which subclusters contain these compounds
+            subclusters_with_category = set()
+            for compound in category_compounds:
+                compound_data = self.library.df[self.library.df["Compound"] == compound]
+                if not compound_data.empty:
+                    subcluster = compound_data[str(self.fine_threshold)].iloc[0]
+                    subclusters_with_category.add(subcluster)
+            
+            # Find the node indices for these subclusters
+            node_indices = []
+            for i, node_label in enumerate(self.node_labels):
+                if node_label in subclusters_with_category:
+                    node_indices.append(i)
+            
+            # Update the graph selection
+            if node_indices:
+                self.selection.update(index=node_indices)
+                
+        except Exception as e:
+            print(f"Error in histogram click handler: {e}")
+
     @param.depends("selected_nodes", watch=True)
     def graph_view(self):
         """Return the graph plot with updated segments and edges."""
@@ -603,13 +669,19 @@ class ClusterF(param.Parameterized):
                 xlabel="Category",
                 ylabel="Count",
                 xrotation=45,
-                tools=["hover"],
+                tools=["hover", "tap"],  # Add tap tool for interactivity
+                active_tools=["tap"],
                 toolbar="above",
                 ylim=(
                     0,
                     1.2 * hist_data[hist_data["Category"] != "Miss"]["Count"].max(),
                 ),  # Set y-axis limits to auto scale
             )
+
+            # Set up selection stream for histogram bar clicks
+            # Recreate the selection stream each time to attach it to the new bars object
+            self.histogram_selection = Selection1D(source=bars)
+            self.histogram_selection.param.watch(self.on_histogram_click, "index")
 
             return bars
 
