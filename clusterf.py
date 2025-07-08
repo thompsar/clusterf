@@ -78,7 +78,6 @@ class ClusterF(param.Parameterized):
     compound_input = param.String()
     selected_compound = param.String()
     selected_nodes = param.List()  # Track the selected node
-    selected_cluster = param.List()
     recluster_button = param.Action(
         lambda x: x.param.trigger("recluster_button"), label="Recluster Library"
     )
@@ -294,17 +293,6 @@ class ClusterF(param.Parameterized):
         
         table_df = table_df[self.visible_columns].reset_index()
         return table_df
-
-    # below currently does nothing!!!
-    @param.depends("selected_cluster", watch=True)
-    def update_table(self):
-        nodes = self.library.nodes.data.loc[self.selected_cluster, "index"].values
-        new_df = self.library.df
-        new_df = new_df[new_df[self.fine_threshold].isin(nodes)][
-            self.visible_columns
-        ].reset_index()
-        self.compound_table.value = new_df
-        self.compound_table.visible = True
 
     @param.depends("search_button", watch=True)
     def search_compound(self):
