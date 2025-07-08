@@ -118,6 +118,7 @@ class ClusterF(param.Parameterized):
         self.color_widgets = {}
         self.color_collapse = None
         self.visible_columns = ["Compound", "SMILES", str(self.fine_threshold)]
+        # SuperCluster will be added to visible columns after it's created
         self.compound_table = pn.widgets.Tabulator(
             self.library.df[self.visible_columns],
             height=400,
@@ -150,14 +151,15 @@ class ClusterF(param.Parameterized):
     # Update graph view and table after slider release
     def update_throttled(self, event):
         """This function updates only when the slider stops moving (throttled)."""
-
+        #Note: probably ok to get rid of library.super_clusters
+        # as we are going to store super clusters as a column in the df
         cluster_set = self.library.super_clusters[event.new - 1]
-        member_cluster = cluster_set[0]  # TODO: fix this
+        member_cluster = cluster_set[0]  # TODO: fix this, especially now that we have super clusters
         self.common_substructure = None
         self.library.build_subgraph(member_cluster)
         self.initialize_graph_plot(self.library.sub_graph)
         self.graph_view()
-        self.compound_table.value = self.build_table(cluster_set)
+        self.compound_table.value = self.build_table(event.new)  # Use super cluster number directly
         self.selected_compound = ""
         self.compound_image.object = None
         # Update the category histogram for the new super cluster
@@ -178,6 +180,9 @@ class ClusterF(param.Parameterized):
     @param.depends("fine_threshold", watch=True)
     def update_fine_threshold(self):
         self.visible_columns = ["Compound", "SMILES", str(self.fine_threshold)]
+        # Remove SuperCluster from visible columns since it will be recreated
+        if "SuperCluster" in self.visible_columns:
+            self.visible_columns.remove("SuperCluster")
         self.compound_table.visible = False
         self.compound_image.object = None
         self.compound_grid.svgs = []
@@ -226,6 +231,7 @@ class ClusterF(param.Parameterized):
             # save clustering results
             self.library.subset_df.to_csv(self.subset_select, index=False)
         self.library.build_graph(self.fine_threshold, self.coarse_threshold)
+        self.add_super_cluster_column()  # Add super cluster information to dataframe
         self.colorize_clusters()
 
         self.param.cluster_slider.objects = list(
@@ -246,18 +252,46 @@ class ClusterF(param.Parameterized):
         self.initialize_graph_plot(self.library.sub_graph)
         self.graph_view()
 
-        self.compound_table.value = self.build_table(self.library.super_clusters[0])
+        self.compound_table.value = self.build_table(1)  # First super cluster
         self.compound_table.visible = True
 
         # Initialize the category histogram for the first super cluster
         if hasattr(self, "color_dict"):
             self.category_histogram.object = self.create_category_histogram()
 
-    def build_table(self, clusters):
-        if not isinstance(clusters, list):
-            clusters = [clusters]
+    def build_table(self, clusters_or_super_cluster):
+        """
+        Build table from either a super cluster number or list of cluster nodes.
+        
+        Args:
+            clusters_or_super_cluster: Either:
+                - int/float: Super cluster number (1-indexed) to show all compounds in that super cluster
+                - list: List of cluster node IDs to show compounds from specific selected clusters
+        
+        Returns:
+            pd.DataFrame: Filtered dataframe with compounds from specified clusters
+        """
         table_df = self.library.df
-        table_df = table_df[table_df[str(self.fine_threshold)].isin(list(clusters))]
+        
+        # Check if input is a single integer (super cluster number)
+        if isinstance(clusters_or_super_cluster, (int, float)):
+            # Filter by super cluster number using the SuperCluster column
+            if "SuperCluster" in table_df.columns:
+                table_df = table_df[table_df["SuperCluster"] == clusters_or_super_cluster]
+            else:
+                # Fallback to old method if SuperCluster column doesn't exist
+                super_cluster_idx = int(clusters_or_super_cluster) - 1
+                if hasattr(self.library, "super_clusters") and super_cluster_idx < len(self.library.super_clusters):
+                    cluster_list = self.library.super_clusters[super_cluster_idx]
+                    table_df = table_df[table_df[str(self.fine_threshold)].isin(cluster_list)]
+                else:
+                    return pd.DataFrame(columns=self.visible_columns)  # Return empty table
+        else:
+            # Input is a list of cluster nodes - filter by those specific clusters
+            if not isinstance(clusters_or_super_cluster, list):
+                clusters_or_super_cluster = [clusters_or_super_cluster]
+            table_df = table_df[table_df[str(self.fine_threshold)].isin(clusters_or_super_cluster)]
+        
         table_df = table_df[self.visible_columns].reset_index()
         return table_df
 
@@ -280,21 +314,32 @@ class ClusterF(param.Parameterized):
             # not great for usability FIX.
             compound = [int(comp) for comp in compounds][0]
             try:
-                cluster = self.library.get_compounds(compound)[
-                    str(self.fine_threshold)
-                ].values[0]
-                # super_cluster = [
-                #     idx
-                #     for idx, super_cluster in enumerate(self.library.super_clusters)
-                #     if cluster in super_cluster
-                # ][0] + 1
-                super_cluster = [
-                    idx
-                    for idx, super_cluster in enumerate(self.library.super_clusters)
-                    if cluster in super_cluster
-                ]
+                # Get cluster information for the compound
+                compound_data = self.library.get_compounds(compound)
+                if compound_data.empty:
+                    self.compound_input = "Compound not found in library, check ID"
+                    return
+                    
+                cluster = compound_data[str(self.fine_threshold)].values[0]
+                
+                # Check if we have SuperCluster column for more efficient lookup
+                if "SuperCluster" in self.library.df.columns:
+                    super_cluster_data = self.library.df[
+                        self.library.df["Compound"] == str(compound)
+                    ]["SuperCluster"]
+                    if not super_cluster_data.empty:
+                        super_cluster = int(super_cluster_data.iloc[0])
+                    else:
+                        super_cluster = None
+                else:
+                    # Fallback to old method
+                    super_cluster = None
+                    for idx, super_cluster_list in enumerate(self.library.super_clusters):
+                        if cluster in super_cluster_list:
+                            super_cluster = idx + 1
+                            break
+                
                 if super_cluster:
-                    super_cluster = super_cluster[0] + 1
                     self.slider_widget.value = super_cluster
                     # TODO: Below seems like a janky fix...but it works.
                     event = MockEvent(super_cluster)
@@ -320,7 +365,7 @@ class ClusterF(param.Parameterized):
                     # NOTE: --autoreload breaks displaying on svg file for some reason
 
                     # update table
-                    new_table = self.build_table(cluster)
+                    new_table = self.build_table([cluster])  # Pass as list for single cluster
                     self.compound_table.value = new_table
                     self.selected_nodes = []
 
@@ -472,8 +517,8 @@ class ClusterF(param.Parameterized):
             # self.compound_grid.object = None
             self.compound_grid.svgs = []
             self.compound_image.object = None
-            super_cluster = self.library.super_clusters[self.slider_widget.value - 1]
-            self.compound_table.value = self.build_table(super_cluster)
+            # Reset table to show current super cluster
+            self.compound_table.value = self.build_table(self.slider_widget.value)
             self.selected_nodes = []
 
     def on_histogram_click(self, event):
@@ -483,9 +528,9 @@ class ClusterF(param.Parameterized):
         
         try:
             # Get the index of the clicked bar
-            print(event)
+            
             clicked_index = event.new[0] if event.new else None
-            print(clicked_index)
+            
             if clicked_index is None:
                 return
             
@@ -501,15 +546,8 @@ class ClusterF(param.Parameterized):
             # Get the clicked category
             clicked_category = all_categories[clicked_index]
             
-            # Get current super cluster
-            current_super_cluster = self.library.super_clusters[
-                self.slider_widget.value - 1
-            ]
-            
-            # Find all compounds in current super cluster with the clicked category
-            cluster_compounds = self.library.df[
-                self.library.df[str(self.fine_threshold)].isin(current_super_cluster)
-            ]["Compound"].tolist()
+            # Find all compounds in current super cluster
+            cluster_compounds = self.get_current_super_cluster_compounds()
             
             # Get compounds of the clicked category
             category_compounds = self.library.subset_df[
@@ -605,15 +643,8 @@ class ClusterF(param.Parameterized):
             )
 
         try:
-            # Get current super cluster
-            current_super_cluster = self.library.super_clusters[
-                self.slider_widget.value - 1
-            ]
-
             # Get compounds in current super cluster
-            cluster_compounds = self.library.df[
-                self.library.df[str(self.fine_threshold)].isin(current_super_cluster)
-            ]["Compound"].tolist()
+            cluster_compounds = self.get_current_super_cluster_compounds()
 
             # Get categories for these compounds
             subset_data = self.library.subset_df[
@@ -636,7 +667,6 @@ class ClusterF(param.Parameterized):
 
             # Count categories in current super cluster
             category_counts = subset_data["Category"].value_counts()
-            # print(category_counts)
 
             # Create complete DataFrame including all categories (even with 0 counts)
             hist_data = pd.DataFrame(
@@ -817,6 +847,39 @@ class ClusterF(param.Parameterized):
 
         return pn.Column(*widget_rows, margin=(10, 5))
 
+    def add_super_cluster_column(self):
+        """Add a super cluster column to the library dataframe for easier filtering."""
+        if not hasattr(self.library, "super_clusters"):
+            return
+        
+        # Initialize super cluster column with NaN
+        self.library.df["SuperCluster"] = np.nan
+        
+        # Map each cluster to its super cluster number
+        for super_cluster_number, cluster_list in enumerate(self.library.super_clusters, start=1):
+            # Super cluster numbers are 1-indexed for UI display
+            # Update all rows that belong to clusters in this super cluster
+            mask = self.library.df[str(self.fine_threshold)].isin(cluster_list)
+            self.library.df.loc[mask, "SuperCluster"] = super_cluster_number
+        
+        # Add SuperCluster to visible columns if not already there
+        if "SuperCluster" not in self.visible_columns:
+            self.visible_columns.append("SuperCluster")
+
+    def get_current_super_cluster_compounds(self):
+        """Get list of compounds in the current super cluster."""
+        current_super_cluster_num = self.slider_widget.value
+        
+        if "SuperCluster" in self.library.df.columns:
+            return self.library.df[
+                self.library.df["SuperCluster"] == current_super_cluster_num
+            ]["Compound"].tolist()
+        else:
+            # Fallback to old method if SuperCluster column doesn't exist
+            current_super_cluster = self.library.super_clusters[current_super_cluster_num - 1]
+            return self.library.df[
+                self.library.df[str(self.fine_threshold)].isin(current_super_cluster)
+            ]["Compound"].tolist()
 
 class MockEvent:
     def __init__(self, new=None, row=None):
