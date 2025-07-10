@@ -238,8 +238,8 @@ class ClusterF(param.Parameterized):
         )
         self.slider_widget.value = 1
         self.slider_widget.disabled = False
-        self.colorize_clusters()
-        # draw the histogram
+        self.update_cluster_colors()
+        # draw the super cluster scatter plot
         chart = self.library.draw_cluster_chart()
         # highlight the first cluster
         cluster_sizes = self.library.cluster_sizes
@@ -251,9 +251,13 @@ class ClusterF(param.Parameterized):
         self.library.build_subgraph(member_cluster)
         self.initialize_graph_plot(self.library.sub_graph)
         self.graph_view()
-
-        self.compound_table.value = self.build_table(1)  # First super cluster
+        new_table = self.build_table(1)  # First super cluster
+        self.compound_table.value = new_table
         self.compound_table.visible = True
+        
+        compounds = new_table["Compound"].values
+        self.update_compound_grid(compounds)
+
 
         # Initialize the category histogram for the first super cluster
         if hasattr(self, "color_dict"):
@@ -358,30 +362,9 @@ class ClusterF(param.Parameterized):
                     self.compound_table.value = new_table
                     self.selected_nodes = []
 
-                    # code below was taken from update_selection to allow drawing of grid
+                    # draw grid for compounds in this cluster
                     compounds = new_table["Compound"].values
-
-                    if len(compounds) > 1:
-                        mols_per_row = 4
-                        max_rows = 3
-                        orient = True
-                    else:
-                        mols_per_row = 4
-                        max_rows = 1
-                        orient = False
-
-                    grid_image, self.common_substructure = (
-                        self.library.draw_compound_grid(
-                            compounds,
-                            mols_per_row=mols_per_row,
-                            max_rows=max_rows,
-                            color_dict=self.color_dict,
-                            orient=orient,
-                            legend=False,  # note this actually does nothing right now
-                        )
-                    )
-
-                    self.compound_grid.svgs = grid_image
+                    self.update_compound_grid(compounds)
 
             except IndexError:
                 # TODO: Should return default looking text, not input style text
@@ -475,26 +458,7 @@ class ClusterF(param.Parameterized):
             self.compound_table.value = new_table
             # draw grid
             compounds = new_table["Compound"].values
-
-            if len(compounds) > 1:
-                mols_per_row = 4
-                max_rows = 3
-                orient = True
-            else:
-                mols_per_row = 4
-                max_rows = 1
-                orient = False
-
-            grid_image, self.common_substructure = self.library.draw_compound_grid(
-                compounds,
-                mols_per_row=mols_per_row,
-                max_rows=max_rows,
-                color_dict=self.color_dict,
-                orient=orient,
-                legend=False,  # note this actually does nothing right now
-            )
-
-            self.compound_grid.svgs = grid_image
+            self.update_compound_grid(compounds)
             # clear selected compound
             self.selected_compound = ""
             self.compound_image.object = None
@@ -503,8 +467,7 @@ class ClusterF(param.Parameterized):
             # node has been deselected, clear everything and reset table
             # Note: This can also go below in graph_view? Perhaps here is better
             # because it is more explicit for the action being taken.
-            # self.compound_grid.object = None
-            self.compound_grid.svgs = []
+            self.update_compound_grid([])  # Clear the grid
             self.compound_image.object = None
             # Reset table to show current super cluster
             self.compound_table.value = self.build_table(self.slider_widget.value)
@@ -620,10 +583,7 @@ class ClusterF(param.Parameterized):
             # Reset to default view (all edges normal)
             self.cluster_graph.object = self.initial_edges * self.points * self.labels
 
-    def colorize_clusters(self):
-        self.update_cluster_colors()
-        self.refresh_compound_grid()
-        
+    
     def create_category_histogram(self):
         """Create a histogram showing category distribution for the current super cluster."""
         if not hasattr(self, "library") or not hasattr(self.library, "subset_df"):
@@ -742,8 +702,12 @@ class ClusterF(param.Parameterized):
             # Update the histogram with new colors
             if hasattr(self, "category_histogram"):
                 self.category_histogram.object = self.create_category_histogram()
-            # Update the compound grid with new colors
-            self.refresh_compound_grid()
+            # Update the compound grid with new colors - get compounds directly
+            if hasattr(self, "selected_nodes") and self.selected_nodes:
+                current_table = self.compound_table.value
+                if not current_table.empty and "Compound" in current_table.columns:
+                    compounds = current_table["Compound"].values
+                    self.update_compound_grid(compounds)
 
     def update_cluster_colors(self):
         """Update cluster colors based on current color picker values."""
@@ -823,36 +787,35 @@ class ClusterF(param.Parameterized):
             # Refresh the graph view
             self.graph_view()
 
-    def refresh_compound_grid(self):
-        """Refresh the compound grid with updated colors."""
-        if hasattr(self, "selected_nodes") and self.selected_nodes:
-            # Get current compounds from the table
-            current_table = self.compound_table.value
-            if not current_table.empty and "Compound" in current_table.columns:
-                compounds = current_table["Compound"].values
-                
-                # Determine grid parameters based on number of compounds
-                if len(compounds) > 1:
-                    mols_per_row = 4
-                    max_rows = 3
-                    orient = True
-                else:
-                    mols_per_row = 4
-                    max_rows = 1
-                    orient = False
+    def update_compound_grid(self, compounds):
+        """Update the compound grid display with given compounds."""
+        if len(compounds) == 0:
+            self.compound_grid.svgs = []
+            self.common_substructure = None
+            return
+        
+        # Determine grid parameters based on number of compounds
+        if len(compounds) > 1:
+            mols_per_row = 4
+            max_rows = 3
+            orient = True
+        else:
+            mols_per_row = 4
+            max_rows = 1
+            orient = False
 
-                # Regenerate the grid with updated colors
-                grid_image, self.common_substructure = self.library.draw_compound_grid(
-                    compounds,
-                    mols_per_row=mols_per_row,
-                    max_rows=max_rows,
-                    color_dict=self.color_dict,
-                    orient=orient,
-                    legend=False,
-                )
-                
-                # Update the compound grid display
-                self.compound_grid.svgs = grid_image
+        # Generate the grid with current colors
+        grid_image, self.common_substructure = self.library.draw_compound_grid(
+            compounds,
+            mols_per_row=mols_per_row,
+            max_rows=max_rows,
+            color_dict=self.color_dict,
+            orient=orient,
+            legend=False,
+        )
+        
+        # Update the compound grid display
+        self.compound_grid.svgs = grid_image
 
     def get_color_widgets_panel(self):
         """Create a collapsible panel containing all color widgets."""
