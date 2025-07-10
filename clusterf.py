@@ -231,13 +231,14 @@ class ClusterF(param.Parameterized):
             self.library.subset_df.to_csv(self.subset_select, index=False)
         self.library.build_graph(self.fine_threshold, self.coarse_threshold)
         self.add_super_cluster_column()  # Add super cluster information to dataframe
-        self.colorize_clusters()
+        
 
         self.param.cluster_slider.objects = list(
             range(1, len(self.library.super_clusters) + 1)
         )
         self.slider_widget.value = 1
         self.slider_widget.disabled = False
+        self.colorize_clusters()
         # draw the histogram
         chart = self.library.draw_cluster_chart()
         # highlight the first cluster
@@ -621,8 +622,8 @@ class ClusterF(param.Parameterized):
 
     def colorize_clusters(self):
         self.update_cluster_colors()
-        # TODO: update grid colors
-        #         
+        self.refresh_compound_grid()
+        
     def create_category_histogram(self):
         """Create a histogram showing category distribution for the current super cluster."""
         if not hasattr(self, "library") or not hasattr(self.library, "subset_df"):
@@ -741,6 +742,8 @@ class ClusterF(param.Parameterized):
             # Update the histogram with new colors
             if hasattr(self, "category_histogram"):
                 self.category_histogram.object = self.create_category_histogram()
+            # Update the compound grid with new colors
+            self.refresh_compound_grid()
 
     def update_cluster_colors(self):
         """Update cluster colors based on current color picker values."""
@@ -819,6 +822,37 @@ class ClusterF(param.Parameterized):
 
             # Refresh the graph view
             self.graph_view()
+
+    def refresh_compound_grid(self):
+        """Refresh the compound grid with updated colors."""
+        if hasattr(self, "selected_nodes") and self.selected_nodes:
+            # Get current compounds from the table
+            current_table = self.compound_table.value
+            if not current_table.empty and "Compound" in current_table.columns:
+                compounds = current_table["Compound"].values
+                
+                # Determine grid parameters based on number of compounds
+                if len(compounds) > 1:
+                    mols_per_row = 4
+                    max_rows = 3
+                    orient = True
+                else:
+                    mols_per_row = 4
+                    max_rows = 1
+                    orient = False
+
+                # Regenerate the grid with updated colors
+                grid_image, self.common_substructure = self.library.draw_compound_grid(
+                    compounds,
+                    mols_per_row=mols_per_row,
+                    max_rows=max_rows,
+                    color_dict=self.color_dict,
+                    orient=orient,
+                    legend=False,
+                )
+                
+                # Update the compound grid display
+                self.compound_grid.svgs = grid_image
 
     def get_color_widgets_panel(self):
         """Create a collapsible panel containing all color widgets."""
