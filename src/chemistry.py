@@ -29,23 +29,27 @@ class ChemLibrary:
         """
         Loads chemical library file
         """
-        path = 'compound_libraries/'
-        self.library_file = path + self.library_name + '.csv'
+        path = "compound_libraries/"
+        self.library_file = path + self.library_name + ".csv"
         try:
             self.df = pd.read_csv(self.library_file)
             self.df = self.standardize_df(self.df)
 
         except FileNotFoundError:
             raise FileNotFoundError(
-                'Library not found, supported libraries are cns and diverset'
+                "Library not found, supported libraries are cns and diverset"
             )
 
     def load_subset(self, path):
         """
-        Loads subset of library
+        Loads subset of library, populates Category column of df
         """
         self.subset_df = pd.read_csv(path)
         self.subset_df = self.standardize_df(self.subset_df)
+        self.df = self.df.merge(
+            self.subset_df[["Compound", "Category"]], on="Compound", how="left"
+        )
+        self.df["Category"] = self.df["Category"].fillna("Miss")
 
     def standardize_df(self, df):
         """
@@ -62,12 +66,12 @@ class ChemLibrary:
 
     def cluster_subset(self, coarse_thresh):
         # check to see if subset_df already has SMILES strings
-        if 'SMILES' not in self.subset_df.columns:
+        if "SMILES" not in self.subset_df.columns:
             subset_smiles = self.df[
                 self.df.Compound.isin(self.subset_df.Compound.values)
-            ][['Compound', 'SMILES']]
+            ][["Compound", "SMILES"]]
             # merge subset smiles with subset_df
-            self.subset_df = subset_smiles.merge(self.subset_df, on='Compound')
+            self.subset_df = subset_smiles.merge(self.subset_df, on="Compound")
         mols = [MolFromSmiles(smiles) for smiles in self.subset_df.SMILES.values]
         # see https://greglandrum.github.io/rdkit-blog/posts/2023-01-18-fingerprint-generator-tutorial.html
         # for more info on finger printing
@@ -94,11 +98,11 @@ class ChemLibrary:
 
         # Precompute cluster to compound and compound to cluster mappings
         fine_clusters = self.df.groupby(fine_thresh).Compound.apply(list).to_dict()
-        fine_compounds = self.df.set_index('Compound')[fine_thresh].to_dict()
+        fine_compounds = self.df.set_index("Compound")[fine_thresh].to_dict()
         coarse_clusters = (
             self.subset_df.groupby(coarse_thresh).Compound.apply(list).to_dict()
         )
-        coarse_compounds = self.subset_df.set_index('Compound')[coarse_thresh].to_dict()
+        coarse_compounds = self.subset_df.set_index("Compound")[coarse_thresh].to_dict()
 
         # Initialize edge array
         dims = len(fine_clusters)
@@ -162,7 +166,7 @@ class ChemLibrary:
             (213, 94, 0),
             (204, 121, 167),
         ]
-        cb_colors = ['#%02x%02x%02x' % color for color in cb_colors]
+        cb_colors = ["#%02x%02x%02x" % color for color in cb_colors]
 
         self.build_subgraph(member_cluster)
 
@@ -173,15 +177,15 @@ class ChemLibrary:
             self.sub_graph,
             positions=self.node_pos,
         ).opts(
-            tools=['tap', 'lasso_select'],
-            node_color='type',
+            tools=["tap", "lasso_select"],
+            node_color="type",
             edge_alpha=1,
             node_alpha=0.9,
             node_size=50,
         )
         self.nodes = plot.nodes
-        labels = hv.Labels(plot.nodes, ['x', 'y'], 'index')
-        self.graph_plot = plot * labels.opts(text_font_size='12pt', text_color='black')
+        labels = hv.Labels(plot.nodes, ["x", "y"], "index")
+        self.graph_plot = plot * labels.opts(text_font_size="12pt", text_color="black")
         return self.graph_plot
 
     def draw_cluster_chart(self):
@@ -195,7 +199,7 @@ class ChemLibrary:
         ]
 
         plot = hv.Scatter(self.cluster_sizes).opts(
-            tools=['hover', 'tap'],
+            tools=["hover", "tap"],
             width=300,
             height=200,
             size=10,
@@ -224,18 +228,12 @@ class ChemLibrary:
             compound_ids = [compound_ids]
         compound_ids = [str(compound_id) for compound_id in compound_ids]
 
-        subset = self.df[self.df['Compound'].isin(compound_ids)]
-
-        if hasattr(self, 'subset_df'):
-            subset = subset.merge(
-                self.subset_df[['Compound', 'Category']], on='Compound', how='left'
-            )
-            subset['Category'] = subset['Category'].fillna('Miss')
+        subset = self.df[self.df["Compound"].isin(compound_ids)]
 
         # check for missing compounds
-        missing = set(compound_ids) - set(subset['Compound'])
+        missing = set(compound_ids) - set(subset["Compound"])
         if len(missing) > 0:
-            msg = 'Compound(s) ' + ', '.join(missing) + ' not found in library'
+            msg = "Compound(s) " + ", ".join(missing) + " not found in library"
             warnings.warn(msg)
         return subset
 
@@ -273,10 +271,10 @@ class ChemLibrary:
         img_size = 300  # Smaller size for better performance in web apps
         chem_info = self.get_compounds(compound_ids)
         # redefine compound_ids below to handle input of bad ID
-        compound_ids = chem_info['Compound'].values
-        all_categories = chem_info['Category'].values
+        compound_ids = chem_info["Compound"].values
+        all_categories = chem_info["Category"].values
         all_mols = [
-            Chem.MolFromSmiles(smiles_str) for smiles_str in chem_info['SMILES']
+            Chem.MolFromSmiles(smiles_str) for smiles_str in chem_info["SMILES"]
         ]
 
         if orient:
@@ -294,10 +292,10 @@ class ChemLibrary:
 
         ngrids = int(np.ceil(len(all_mols) / (mols_per_row * max_rows)))
         mols_per_grid = mols_per_row * max_rows
-       
+
         def raggedify(var, mols_per_grid):
             if var is None:
-                return [None]*ngrids
+                return [None] * ngrids
             else:
                 return [
                     var[i : i + mols_per_grid]
@@ -312,25 +310,27 @@ class ChemLibrary:
             all_categories,
         ]
 
-        
         vars = map(lambda x: raggedify(x, mols_per_grid), vars)
-        
+
         imgs = []
         for mols, ids, atoms, colors, categories in zip(*vars):
             # Render the molecules in SVG format
-            #legend below used to be [str(id) for id in ids],
+            # legend below used to be [str(id) for id in ids],
             img = Draw.MolsToGridImage(
                 mols,
                 molsPerRow=mols_per_row,
                 subImgSize=(img_size, img_size),
                 highlightAtomLists=atoms,
                 highlightAtomColors=colors,
-                legends=[str(id)+'\n\n'+str(cat) if cat != "Miss" else str(id) for id, cat in zip(ids, categories)],
+                legends=[
+                    str(id) + "\n\n" + str(cat) if cat != "Miss" else str(id)
+                    for id, cat in zip(ids, categories)
+                ],
                 useSVG=True,  # Use SVG rendering for efficiency
             )
 
             # add gridlines (make into function later)
-            delimiter = '</rect>\n'
+            delimiter = "</rect>\n"
             head, tail = img.data.split(delimiter)
             # head, tail = img.split(delimiter)
             head = head + delimiter
@@ -346,18 +346,18 @@ class ChemLibrary:
                 head = head.replace(std_bg_style, new_bg_style)
 
             if color_dict is None:
-                color_dict = {category: 'none' for category in set(categories)}
+                color_dict = {category: "none" for category in set(categories)}
             # override color_dict miss to none
-            color_dict['Miss'] = 'none'
+            color_dict["Miss"] = "none"
             grid_fill = [
                 (
                     f'<rect width="{img_size}" '
                     f'height="{img_size}" '
                     f'x="{x}" y="{y}" '
                     'style="fill:none;'
-                    'fill-opacity:0.3;'
-                    'stroke:black;'
-                    'stroke-width:2;'
+                    "fill-opacity:0.3;"
+                    "stroke:black;"
+                    "stroke-width:2;"
                     'stroke-opacity:1"/>'
                 )
                 for y in range(0, img_size * (len(mols) // mols_per_row + 1), img_size)
@@ -367,11 +367,11 @@ class ChemLibrary:
             # i dont really like this, but its less clunky than trying to cram it in above
             # find a better way!
             grid_fill[: len(categories)] = [
-                line.replace('fill:none', f'fill:{color_dict[category]}')
+                line.replace("fill:none", f"fill:{color_dict[category]}")
                 for category, line in zip(categories, grid_fill[: len(categories)])
             ]
 
-            grid_fill = '\n'.join(grid_fill)
+            grid_fill = "\n".join(grid_fill)
             img.data = head + grid_fill + tail
             # img = head + grid_fill + tail
             imgs.append(img)
@@ -379,7 +379,6 @@ class ChemLibrary:
             return imgs, common_substructure
         else:
             return imgs, None
-
 
     def draw_compound(
         self,
@@ -411,7 +410,7 @@ class ChemLibrary:
 
         img_size = 300  # Smaller size for better performance in web apps
         chem_info = self.get_compounds(compound_id)
-        mols = [Chem.MolFromSmiles(smiles_str) for smiles_str in chem_info['SMILES']]
+        mols = [Chem.MolFromSmiles(smiles_str) for smiles_str in chem_info["SMILES"]]
 
         if common_substructure is not None:
             mols, highlight_atoms = orient_mols(
@@ -476,6 +475,6 @@ def orient_mols(mols, common_substructure=None, return_pattern=False):
         return mols, highlight_atoms, common_substructure
     else:
         return mols, highlight_atoms
-    
-    #References:
+
+    # References:
     # (1) https://projects.volkamerlab.org/teachopencadd/talktorials/T005_compound_clustering.html
