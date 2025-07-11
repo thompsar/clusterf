@@ -124,8 +124,10 @@ class ClusterF(param.Parameterized):
         # SuperCluster will be added to visible columns after it's created
         self.compound_table = pn.widgets.Tabulator(
             self.library.df[self.visible_columns],
+            sizing_mode='stretch_width',
+            min_height=250,
             height=400,
-            width=800,
+            width=None,  # Let it stretch to container width
             selectable=1,
             disabled=True,
             visible=False,
@@ -141,12 +143,32 @@ class ClusterF(param.Parameterized):
         )
         self.slider_widget.param.watch(self.update_throttled, "value_throttled")
         self.compound_table.on_click(self.on_click)
-        self.cluster_chart = pn.pane.HoloViews(object=None)
-        self.cluster_graph = pn.pane.HoloViews(object=None)
+        self.cluster_chart = pn.pane.HoloViews(
+            object=None, 
+            sizing_mode='stretch_width',
+            min_height=200,
+            margin=5
+        )
+        self.cluster_graph = pn.pane.HoloViews(
+            object=None,
+            sizing_mode='stretch_both',
+            min_height=350,
+            min_width=400,
+            margin=5
+        )
         self.compound_grid = Carrousel()
-        self.compound_image = pn.pane.SVG(object=None, width=300, name="Compound Image")
+        self.compound_image = pn.pane.SVG(
+            object=None, 
+            width=300, 
+            name="Compound Image",
+            sizing_mode='fixed'
+        )
         self.category_histogram = pn.pane.HoloViews(
-            object=None, sizing_mode="stretch_width"
+            object=None, 
+            sizing_mode='stretch_both',
+            min_height=250,
+            min_width=400,
+            margin=5
         )
         self.histogram_selection = None  # Will be initialized when histogram is created
         self.common_substructure = None
@@ -438,8 +460,9 @@ class ClusterF(param.Parameterized):
         # Create HoloViews Points for the nodes
         self.points = hv.Points(data, ["x", "y"]).opts(
             size=15,
-            width=800,
-            height=700,
+            min_width=400,
+            min_height=350,
+            responsive=True,
             xaxis=None,
             yaxis=None,
             color="color",
@@ -669,8 +692,9 @@ class ClusterF(param.Parameterized):
             # Create HoloViews bar chart
             bars = hv.Bars(hist_data, ["Category"], ["Count", "%Total", "Color"]).opts(
                 color="Color",
-                width=800,
-                height=400,
+                min_width=400,
+                min_height=250,
+                responsive=True,
                 title=f"Category Distribution - Super Cluster {self.slider_widget.value}",
                 xlabel="Category",
                 ylabel="Count",
@@ -821,8 +845,9 @@ class ClusterF(param.Parameterized):
             # Recreate points with new colors
             self.points = hv.Points(data, ["x", "y"]).opts(
                 size=15,
-                width=800,
-                height=700,
+                min_width=400,
+                min_height=350,
+                responsive=True,
                 xaxis=None,
                 yaxis=None,
                 color="color",
@@ -969,19 +994,38 @@ sidebar = pn.Column(
     pn.pane.Markdown(clusterF.param.selected_compound, margin=(0, 10)),
     clusterF.compound_image,
 )
-main = pn.Column(
-    pn.Row(
-        clusterF.cluster_graph,
-        pn.Column(clusterF.compound_grid.view(), height=700, scroll=True),
-        height=700,
-    ),
-    pn.Row(
-        clusterF.category_histogram,
-        clusterF.compound_table,
-        height=400,
-    ),
-    width=1600,
+# Create a responsive grid layout using GridSpec
+main = pn.GridSpec(
+    sizing_mode='stretch_width',
+    min_height=800,
+    max_height=1400,
+    margin=10,
+    name="Main Layout"
 )
+
+# Configure the grid layout with better proportions:
+# - Top row (0-1): Network graph (left, 60%) and compound grid (right, 40%)
+# - Bottom row (2): Category histogram (left, 50%) and compound table (right, 50%)
+
+# Network graph - larger allocation for better visibility
+main[0:2, 0:3] = clusterF.cluster_graph
+
+# Compound grid - smaller but still functional
+main[0:2, 3:5] = pn.Column(
+    clusterF.compound_grid.view(),
+    sizing_mode='stretch_both',
+    min_height=400,
+    min_width=350,
+    scroll=True,
+    margin=5,
+    name="Compound Grid"
+)
+
+# Category histogram - full width of left side
+main[2:3, 0:2] = clusterF.category_histogram
+
+# Compound table - full width of right side  
+main[2:3, 2:5] = clusterF.compound_table
 
 pn.template.FastListTemplate(
     site="ClusterF",
