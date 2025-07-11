@@ -937,8 +937,6 @@ sidebar = pn.Column(
         },
         show_name=False,
     ),
-    clusterF.cluster_chart,
-    clusterF.slider_widget,
     # Color picker controls in a collapsible widget
     pn.Card(
         clusterF.get_color_widgets_panel,
@@ -947,6 +945,8 @@ sidebar = pn.Column(
         visible=pn.bind(lambda x: x, clusterF.param.color_widgets_visible),
         margin=(10, 5),
     ),
+    clusterF.cluster_chart,
+    clusterF.slider_widget,
     pn.Param(
         clusterF.param,
         parameters=["compound_input"],
