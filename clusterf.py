@@ -124,15 +124,14 @@ class ClusterF(param.Parameterized):
         # SuperCluster will be added to visible columns after it's created
         self.compound_table = pn.widgets.Tabulator(
             self.library.df[self.visible_columns],
-            sizing_mode='stretch_width',
-            min_height=250,
-            height=400,
-            width=None,  # Let it stretch to container width
+            sizing_mode='stretch_both',
             selectable=1,
             disabled=True,
             visible=False,
             show_index=False,
             pagination=None,
+            margin=0,
+            styles={'padding': '0px'}
         )
 
         # Slider widget takes advantage of param for real time updating, but uses param.watch
@@ -143,32 +142,30 @@ class ClusterF(param.Parameterized):
         )
         self.slider_widget.param.watch(self.update_throttled, "value_throttled")
         self.compound_table.on_click(self.on_click)
-        self.cluster_chart = pn.pane.HoloViews(
-            object=None, 
-            sizing_mode='stretch_width',
-            min_height=200,
-            margin=5
-        )
+        
+        #Network of sub-clusters in super cluster
         self.cluster_graph = pn.pane.HoloViews(
             object=None,
             sizing_mode='stretch_both',
-            min_height=350,
-            min_width=400,
-            margin=5
+            margin=0
+        )
+        # Scatter plot of super cluster sizes (in terms of sub-clusters)
+        # TODO: make it number of compounds instead?
+        self.cluster_chart = pn.pane.HoloViews(
+            object=None,
+            sizing_mode='stretch_width',
+            margin=0
         )
         self.compound_grid = Carrousel()
         self.compound_image = pn.pane.SVG(
-            object=None, 
-            width=300, 
+            object=None,
             name="Compound Image",
-            sizing_mode='fixed'
+            sizing_mode='stretch_both'
         )
         self.category_histogram = pn.pane.HoloViews(
-            object=None, 
+            object=None,
             sizing_mode='stretch_both',
-            min_height=250,
-            min_width=400,
-            margin=5
+            margin=0
         )
         self.histogram_selection = None  # Will be initialized when histogram is created
         self.common_substructure = None
@@ -460,8 +457,8 @@ class ClusterF(param.Parameterized):
         # Create HoloViews Points for the nodes
         self.points = hv.Points(data, ["x", "y"]).opts(
             size=15,
-            min_width=400,
-            min_height=350,
+            min_width=300,
+            min_height=300,
             responsive=True,
             xaxis=None,
             yaxis=None,
@@ -475,10 +472,10 @@ class ClusterF(param.Parameterized):
             {("x", "y"): self.node_positions, "text": self.node_labels},
             ["x", "y"],
             "text",
-        ).opts(text_color="black")
+        ).opts(text_color="black", text_font_size="10pt")
         # Create HoloViews Segments for the edges
         self.initial_edges = hv.Segments(self.edges_array).opts(
-            line_width=1, color="gray"
+            line_width=.5, color="gray"
         )
 
         self.selection = Selection1D(source=self.points)
@@ -590,7 +587,7 @@ class ClusterF(param.Parameterized):
             non_selected_nodes = self.points.data.loc[non_selected_index]
 
             selected_points = hv.Points(selected_nodes).opts(
-                size=50, color="color", line_color="k", tools=["tap", "box_select"]
+                size=30, color="color", line_color="k", tools=["tap", "box_select"]
             )
             non_selected_points = hv.Points(non_selected_nodes).opts(
                 size=15, color="color"
@@ -692,16 +689,15 @@ class ClusterF(param.Parameterized):
             # Create HoloViews bar chart
             bars = hv.Bars(hist_data, ["Category"], ["Count", "%Total", "Color"]).opts(
                 color="Color",
-                min_width=400,
-                min_height=250,
+                min_width=300,
+                min_height=300,
                 responsive=True,
                 title=f"Category Distribution - Super Cluster {self.slider_widget.value}",
-                xlabel="Category",
                 ylabel="Count",
+                xlabel="",
                 xrotation=45,
                 tools=["hover", "tap"],  # Add tap tool for interactivity
                 active_tools=["tap"],
-                toolbar="above",
                 ylim=(
                     0,
                     1.2 * hist_data["Count"].max(),
@@ -794,10 +790,6 @@ class ClusterF(param.Parameterized):
             for cluster, counts in cluster_category_counts.iterrows()
         }
 
-        # # Update histogram if it exists
-        # if hasattr(self, "category_histogram") and hasattr(self, "slider_widget"):
-        #     self.category_histogram.object = self.create_category_histogram()
-
     def style_compound_table(self):
         """Apply styles to the compound table based on cluster colors."""
         if not hasattr(self, "compound_table") or not hasattr(
@@ -845,8 +837,8 @@ class ClusterF(param.Parameterized):
             # Recreate points with new colors
             self.points = hv.Points(data, ["x", "y"]).opts(
                 size=15,
-                min_width=400,
-                min_height=350,
+                min_width=300,
+                min_height=300,
                 responsive=True,
                 xaxis=None,
                 yaxis=None,
@@ -871,7 +863,7 @@ class ClusterF(param.Parameterized):
         # Determine grid parameters based on number of compounds
         if len(compounds) > 1:
             mols_per_row = 4
-            max_rows = 3
+            max_rows = 4
             orient = True
         else:
             mols_per_row = 4
@@ -968,7 +960,7 @@ sidebar = pn.Column(
         title="Category Colors",
         collapsed=True,
         visible=pn.bind(lambda x: x, clusterF.param.color_widgets_visible),
-        margin=(10, 5),
+        margin=(5, 2),
     ),
     clusterF.cluster_chart,
     clusterF.slider_widget,
@@ -988,44 +980,36 @@ sidebar = pn.Column(
         clusterF.param,
         parameters=["search_button", "save_button"],
         default_layout=pn.Row,
-        margin=(-2, 5),
+        margin=(2, 2),  
         show_name=False,
     ),
-    pn.pane.Markdown(clusterF.param.selected_compound, margin=(0, 10)),
+    pn.pane.Markdown(clusterF.param.selected_compound, margin=(0, 5)),
     clusterF.compound_image,
+    margin=0,
+    styles={'padding': '0px'}
 )
-# Create a responsive grid layout using GridSpec
+
 main = pn.GridSpec(
-    sizing_mode='stretch_width',
-    min_height=800,
-    max_height=1400,
-    margin=10,
-    name="Main Layout"
-)
-
-# Configure the grid layout with better proportions:
-# - Top row (0-1): Network graph (left, 60%) and compound grid (right, 40%)
-# - Bottom row (2): Category histogram (left, 50%) and compound table (right, 50%)
-
-# Network graph - larger allocation for better visibility
-main[0:2, 0:3] = clusterF.cluster_graph
-
-# Compound grid - smaller but still functional
-main[0:2, 3:5] = pn.Column(
-    clusterF.compound_grid.view(),
+    nrows=3, ncols=2,
     sizing_mode='stretch_both',
-    min_height=400,
-    min_width=350,
-    scroll=True,
-    margin=5,
-    name="Compound Grid"
+    margin=0,
+    name="Main Layout",
+    styles={
+        'gap': '2px',
+        'padding': '2px',
+        'box-sizing': 'border-box'
+    }
 )
 
-# Category histogram - full width of left side
-main[2:3, 0:2] = clusterF.category_histogram
-
-# Compound table - full width of right side  
-main[2:3, 2:5] = clusterF.compound_table
+# Layout:
+# Row 0, Col 0: Network graph
+main[0, 0] = clusterF.cluster_graph
+# Row 0, Col 1: Compound grid (carousel)
+main[0:2, 1] = clusterF.compound_grid.view()
+# Row 1, Col 0: Category histogram
+main[1, 0] = clusterF.category_histogram
+# Row 2, Col 0:2: Compound table (Tabulator), spanning both columns
+main[2, :] = clusterF.compound_table
 
 pn.template.FastListTemplate(
     site="ClusterF",
