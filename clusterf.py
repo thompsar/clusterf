@@ -16,6 +16,7 @@ pn.extension("tabulator", sizing_mode="stretch_width")
 TODO LIST:
 - [x] Orient selected single compounds with those in the cluster
 - [ ] Add more detail to the compound table (LogP, MW, etc.), definitely add Category!
+    - [ ] Add histogram of logP and MW to the graph plot?
 - [ ] Add plots accoriding to values in the table (e.g. MW vs LogP)
     - [ ] Plot values should be highlighted to to reveal compounds of interest. Interesting patterns may appear.
 - [x] Convert compound ID text box into "compound search" box, have that adjust to appropraite cluster/graph
@@ -23,7 +24,7 @@ TODO LIST:
 - [ ] Add a "reset" button to reset the graph to the original view
 - [x] Results of reclustering should be saved to the CSV of the subset file
 - [ ] Cluster hover should provide basic stats about cluster (number of compounds per category, total compounds, etc.)
-- [ ] Subset select should have a drop down menu that shows the subset categories, with color pickers for colorizing the clusters
+- [x] Subset select should have a drop down menu that shows the subset categories, with color pickers for colorizing the clusters
 - [x] Selection of a cluster(s) draws a grid of compounds, all aligned
     - [x] Breaks for larger clusters. Fix this! is there a way to make a carousel of images?
         - See https://discourse.holoviz.org/t/is-there-any-widget-equivalent-to-a-carousel/3431/3
@@ -34,7 +35,7 @@ TODO LIST:
           (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, 
           see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
         - Dealt with by switching over to SVG, which is a much better solution for several reasons.
-- [ ] Colorize table based on category
+- [x] Colorize table based on category
 - [ ] Orienting the compounds in cluster 1772 creates some atom collisions and weird orientations. Fix this.
 - [x] Restore the ability to sort/filter the table
         - solving the table selection bug that kept popping up seemed to fix this. fix was setting pagination=None for some reason?
@@ -52,6 +53,9 @@ TODO LIST:
         the conditions ive mostly tested (0.2, 0.4). Modifying fingerprinting scheme may help, but hasn't worked yet.
     - [ ] FIX: Re-introduce pruned clusters to graph so that Compound Search works (fails currently). Do this by checking to see if they contain any compounds of interest!
 -[ ] Add a way to triage compounds in the table (radio boxes that persist through selections, for example).
+
+NEW:
+-[ ] Switching subsets causes key error with Category, likely need to reset the color widgets and histogram.
 
 """
 
