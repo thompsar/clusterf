@@ -16,3 +16,8 @@ compound_libraries/cns_kinase.csv
 compound_libraries/L1300-Z394273-100uL_provided_Selleck_maps.xlsx
 .gitignore
 compound_libraries/N1477-2.sdf
+.dockerignore
+docker-compose.yml
+Dockerfile
+.vscode/launch.json
+.vscode/tasks.json
