@@ -1,0 +1,8 @@
+panel
+param
+holoviews
+numpy
+pandas
+networkx
+rdkit
+ipython
