@@ -83,7 +83,7 @@ class ClusterF(param.Parameterized):
     lib_select = param.Selector(objects=libraries, default=libraries[1])
     fine_threshold = param.Number(0.2)
     coarse_threshold = param.Number(0.4)
-    subset_select = param.FileSelector(path=os.path.join("compound_subsets", "*.csv*"))
+    dataset_select = param.FileSelector(path=os.path.join("compound_subsets", "*.csv*"))
     compound_input = param.String()
     selected_compound = param.String()
     selected_nodes = param.List()  # Track the selected node
@@ -128,14 +128,14 @@ class ClusterF(param.Parameterized):
         # SuperCluster will be added to visible columns after it's created
         self.compound_table = pn.widgets.Tabulator(
             self.library.df[self.visible_columns],
-            sizing_mode='stretch_both',
+            sizing_mode="stretch_both",
             selectable=1,
             disabled=True,
             visible=False,
             show_index=False,
             pagination=None,
             margin=0,
-            styles={'padding': '0px'}
+            styles={"padding": "0px"},
         )
 
         # Slider widget takes advantage of param for real time updating, but uses param.watch
@@ -146,30 +146,22 @@ class ClusterF(param.Parameterized):
         )
         self.slider_widget.param.watch(self.update_throttled, "value_throttled")
         self.compound_table.on_click(self.on_click)
-        
-        #Network of sub-clusters in super cluster
+
+        # Network of sub-clusters in super cluster
         self.cluster_graph = pn.pane.HoloViews(
-            object=None,
-            sizing_mode='stretch_both',
-            margin=0
+            object=None, sizing_mode="stretch_both", margin=0
         )
         # Scatter plot of super cluster sizes (in terms of sub-clusters)
         # TODO: make it number of compounds instead?
         self.cluster_chart = pn.pane.HoloViews(
-            object=None,
-            sizing_mode='stretch_width',
-            margin=0
+            object=None, sizing_mode="stretch_width", margin=0
         )
         self.compound_grid = Carrousel()
         self.compound_image = pn.pane.SVG(
-            object=None,
-            name="Compound Image",
-            sizing_mode='stretch_both'
+            object=None, name="Compound Image", sizing_mode="stretch_both"
         )
         self.category_histogram = pn.pane.HoloViews(
-            object=None,
-            sizing_mode='stretch_both',
-            margin=0
+            object=None, sizing_mode="stretch_both", margin=0
         )
         self.histogram_selection = None  # Will be initialized when histogram is created
         self.common_substructure = None
@@ -229,11 +221,15 @@ class ClusterF(param.Parameterized):
         self.compound_table.visible = False
         self.compound_image.object = None
 
-    @param.depends("subset_select", watch=True)
-    def load_subset_df(self):
-        # BUG: this only works if there are multiple csv files in the directory
-        # fixing temporarily with if hasattr below in recluster_library
-        self.library.load_subset(self.subset_select)
+    @param.depends("dataset_select", watch=True)
+    def load_dataset_df(self):
+        """Load dataset and create subset_df from unique compounds with categories."""
+
+        if not self.dataset_select:
+            return
+
+        # Load the dataset
+        self.library.load_dataset(self.dataset_select)
 
         # Create color pickers for categories found in the subset
         if (
@@ -246,10 +242,21 @@ class ClusterF(param.Parameterized):
             self.create_color_widgets(self.categories)
             self.color_widgets_visible = True
 
+        # Clear any existing clustering results from UI
+        self.compound_table.visible = False
+        self.compound_image.object = None
+        self.compound_grid.svgs = []
+        self.cluster_graph.object = None
+        self.cluster_chart.object = None
+        self.slider_widget.disabled = True
+
     @param.depends("recluster_button", watch=True)
     def recluster_library(self):
         if not hasattr(self.library, "subset_df"):
-            self.library.load_subset(self.subset_select)
+            # Necessary if dataset_select has only a single dataset or if the first
+            # dataset in the list is selected and wont trigger load_dataset_df
+            # probably should fix this...someday...
+            self.load_dataset_df()
 
         self.slider_widget.disabled = True
         # ensure coarse threshold is greater than fine threshold
@@ -258,10 +265,11 @@ class ClusterF(param.Parameterized):
         # check to see if coarse_threshold is already in library.subdf
         if str(self.coarse_threshold) not in self.library.subset_df.columns:
             self.library.cluster_subset(self.coarse_threshold)
-            # save clustering results
-            self.library.subset_df.to_csv(self.subset_select, index=False)
+            # previously self.library.subset_df.to_csv(self.subset_select, index=False)
+            # save clustering results back to dataset
+            # implement some version of below
+            # self.library.save_dataset(self.dataset_select)
         self.library.build_graph(self.fine_threshold, self.coarse_threshold)
-        self.add_super_cluster_column()  # Add super cluster information to dataframe
 
         self.param.cluster_slider.objects = list(
             range(1, len(self.library.super_clusters) + 1)
@@ -281,6 +289,11 @@ class ClusterF(param.Parameterized):
         self.library.build_subgraph(member_cluster)
         self.initialize_graph_plot(self.library.sub_graph)
         self.graph_view()
+
+        # Add SuperCluster to visible columns if not already there
+        if "SuperCluster" not in self.visible_columns:
+            self.visible_columns.append("SuperCluster")
+        self.visible_columns.append("Category")
         new_table = self.build_table(1)  # First super cluster
         self.compound_table.value = new_table
         self.style_compound_table()
@@ -479,7 +492,7 @@ class ClusterF(param.Parameterized):
         ).opts(text_color="black", text_font_size="10pt")
         # Create HoloViews Segments for the edges
         self.initial_edges = hv.Segments(self.edges_array).opts(
-            line_width=.5, color="gray"
+            line_width=0.5, color="gray"
         )
 
         self.selection = Selection1D(source=self.points)
@@ -902,29 +915,6 @@ class ClusterF(param.Parameterized):
 
         return pn.Column(*widget_rows, margin=(10, 5))
 
-    def add_super_cluster_column(self):
-        """Add a super cluster column to the library dataframe for easier filtering."""
-        if not hasattr(self.library, "super_clusters"):
-            return
-
-        # Initialize super cluster column with NaN
-        self.library.df["SuperCluster"] = np.nan
-
-        # Map each cluster to its super cluster number
-        for super_cluster_number, cluster_list in enumerate(
-            self.library.super_clusters, start=1
-        ):
-            # Super cluster numbers are 1-indexed for UI display
-            # Update all rows that belong to clusters in this super cluster
-            mask = self.library.df[str(self.fine_threshold)].isin(cluster_list)
-            self.library.df.loc[mask, "SuperCluster"] = super_cluster_number
-
-        # Add SuperCluster to visible columns if not already there
-        if "SuperCluster" not in self.visible_columns:
-            self.visible_columns.append("SuperCluster")
-
-        self.visible_columns.append("Category")
-
     def get_current_super_cluster_compounds(self):
         """Get list of compounds in the current super cluster."""
         current_super_cluster_num = self.slider_widget.value
@@ -947,14 +937,14 @@ sidebar = pn.Column(
         clusterF.param,
         parameters=[
             "lib_select",
-            "subset_select",
+            "dataset_select",
             "fine_threshold",
             "coarse_threshold",
             "recluster_button",
         ],
         widgets={
             "lib_select": pn.widgets.RadioButtonGroup,
-            "subset_select": {"name": "Select Compound Subset", "value": ""},
+            "dataset_select": {"name": "Select Dataset", "value": ""},
         },
         show_name=False,
     ),
@@ -984,25 +974,22 @@ sidebar = pn.Column(
         clusterF.param,
         parameters=["search_button", "save_button"],
         default_layout=pn.Row,
-        margin=(2, 2),  
+        margin=(2, 2),
         show_name=False,
     ),
     pn.pane.Markdown(clusterF.param.selected_compound, margin=(0, 5)),
     clusterF.compound_image,
     margin=0,
-    styles={'padding': '0px'}
+    styles={"padding": "0px"},
 )
 
 main = pn.GridSpec(
-    nrows=3, ncols=2,
-    sizing_mode='stretch_both',
+    nrows=3,
+    ncols=2,
+    sizing_mode="stretch_both",
     margin=0,
     name="Main Layout",
-    styles={
-        'gap': '2px',
-        'padding': '2px',
-        'box-sizing': 'border-box'
-    }
+    styles={"gap": "2px", "padding": "2px", "box-sizing": "border-box"},
 )
 
 # Layout:
