@@ -40,9 +40,55 @@ class ChemLibrary:
                 "Library not found, supported libraries are cns and diverset"
             )
 
+    def load_dataset(self, path):
+        """
+        Loads dataset containing potentially multiple copies of compounds across different constructs.
+        Creates both dataset_df (full dataset) and subset_df (unique compounds with categories).
+        Expects dataset to have Category column pre-populated, including "Miss".
+        """
+        self.dataset_df = pd.read_csv(path)
+        self.dataset_df = self.standardize_df(self.dataset_df)
+
+        # Create subset_df with unique compounds and their categories
+        self.create_subset_df()
+
+        # Merge categories into main library df
+        self.df = self.df.merge(
+            self.subset_df[["Compound", "Category"]], on="Compound", how="left"
+        )
+        self.df["Category"] = self.df["Category"].fillna("Miss")
+
+    def create_subset_df(self):
+        """
+        Creates subset_df from dataset_df with unique compounds and consolidated categories.
+        If clustering columns exist in dataset_df, they will be preserved in subset_df.
+        """
+        if not hasattr(self, "dataset_df"):
+            raise ValueError("dataset_df not loaded. Call load_dataset first.")
+
+        # Get clustering columns that might already exist in dataset_df
+        clustering_columns = []
+        for column in self.dataset_df.columns:
+            try:
+                # Check if column name can be converted to float (clustering threshold)
+                float(column)
+                clustering_columns.append(column)
+            except ValueError:
+                continue
+        columns = ["Compound"] + clustering_columns + ["Category"]
+        # Create subset_df with unique compounds
+        self.subset_df = (
+            self.dataset_df[self.dataset_df.Category != "Miss"][columns]
+            .drop_duplicates(subset="Compound")
+            .reset_index(drop=True)
+        )
+
+        self.subset_df = self.standardize_df(self.subset_df)
+
     def load_subset(self, path):
         """
-        Loads subset of library, populates Category column of df
+        Backward compatibility method. Loads subset of library, populates Category column of df.
+        This method is deprecated in favor of load_dataset.
         """
         self.subset_df = pd.read_csv(path)
         self.subset_df = self.standardize_df(self.subset_df)
@@ -141,6 +187,17 @@ class ChemLibrary:
             if len(subgraph) > 1
         ]
         self.super_clusters.sort(key=len, reverse=True)
+        #add super cluster information to dataframe
+        # Initialize super cluster column with NaN
+        self.df["SuperCluster"] = np.nan
+
+        # Map each cluster to its super cluster number (1-indexed)
+        for super_cluster_number, cluster_list in enumerate(
+            self.super_clusters, start=1
+        ):
+            mask = self.df[fine_thresh].isin(cluster_list)
+            self.df.loc[mask, "SuperCluster"] = super_cluster_number
+        
 
     def build_subgraph(self, member_cluster):
         """
