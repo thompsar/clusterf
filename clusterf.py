@@ -56,6 +56,13 @@ TODO LIST:
 
 NEW:
 -[ ] Switching subsets causes key error with Category, likely need to reset the color widgets and histogram.
+-[ ] Rendering compound data causes table to scroll back to the top. Seems like a persistent bug over the years in tabulator, may have to live with it for now.
+-[ ] Filter out Misses from the table
+-[ ] Allow for selection of multiple compounds from the table. Draw those particular compounds in the grid. Plot their data in the compound data chart.
+    - [ ] Implement multi-select functionality in the compound table
+    - [ ] Update the compound grid to display selected compounds
+    - [ ] Update the compound data chart to display data for selected compounds
+    - [ ] Remove rendering of single compounds in the control panel, instead render the selected compounds in the compound grid?
 
 """
 
@@ -86,7 +93,6 @@ class ClusterF(param.Parameterized):
     dataset_select = param.FileSelector(path=os.path.join("compound_subsets", "*.csv*"))
     compound_input = param.String()
     selected_compound = param.String()
-    compound_data = param.Parameter(default=None)  # Will be set when compound is selected
     selected_nodes = param.List()  # Track the selected node
     recluster_button = param.Action(
         lambda x: x.param.trigger("recluster_button"), label="Recluster Library"
@@ -146,7 +152,7 @@ class ClusterF(param.Parameterized):
             self.param.cluster_slider, name="Super Cluster", disabled=True
         )
         self.slider_widget.param.watch(self.update_throttled, "value_throttled")
-        self.compound_table.on_click(self.on_click)
+        self.compound_table.on_click(self.on_table_click)
 
         # Network of sub-clusters in super cluster
         self.cluster_graph = pn.pane.HoloViews(
@@ -165,11 +171,8 @@ class ClusterF(param.Parameterized):
             object=None, sizing_mode="stretch_both", margin=0
         )
         self.histogram_selection = None  # Will be initialized when histogram is created
-        self.compound_lifetime_chart = pn.pane.HoloViews(
-            object=hv.Text(0.5, 0.5, "Select a compound in the table to view Delta Lifetime data").opts(
-                width=400, height=300, xaxis=None, yaxis=None
-            ), 
-            sizing_mode="stretch_both", margin=0
+        self.compound_data_chart = pn.pane.HoloViews(
+            object=None, sizing_mode="stretch_both", margin=0
         )
         self.common_substructure = None
 
@@ -256,10 +259,7 @@ class ClusterF(param.Parameterized):
         self.cluster_graph.object = None
         self.cluster_chart.object = None
         self.slider_widget.disabled = True
-        # Reset compound lifetime chart
-        self.compound_lifetime_chart.object = hv.Text(0.5, 0.5, "Select a compound in the table to view Delta Lifetime data").opts(
-            width=400, height=300, xaxis=None, yaxis=None
-        )
+        self.compound_data_chart.object = None
 
     @param.depends("recluster_button", watch=True)
     def recluster_library(self):
@@ -415,7 +415,7 @@ class ClusterF(param.Parameterized):
                     ]  # highlights the row in table, but doesnt click
                     event = MockEvent(row=int(index))
                     # simulate click on table row
-                    self.on_click(event)
+                    self.on_table_click(event)
                 else:
                     # TODO: Everything below here is a temporary fix to handle compounds that are in the hit list
                     # but do not form super clusters (e.g. singletons, orphans, etc.)
@@ -444,7 +444,7 @@ class ClusterF(param.Parameterized):
         # the compound image to the excel file
         self.compound_table.value.to_excel("compound_list.xlsx", index=False)
 
-    def on_click(self, event):
+    def on_table_click(self, event):
         compound = self.compound_table.value.loc[event.row, "Compound"]
         image = self.library.draw_compound(
             compound,
@@ -453,9 +453,9 @@ class ClusterF(param.Parameterized):
         )
         self.selected_compound = "### Compound ID: " + compound
         self.compound_image.object = image
-        
-        # Update the compound lifetime chart
-        self.compound_lifetime_chart.object = self.create_compound_lifetime_chart(compound)
+
+        # Update the compound data chart
+        self.compound_data_chart.object = self.create_compound_data_chart(compound)
 
     def initialize_graph_plot(self, G):
         self.G = G
@@ -535,10 +535,7 @@ class ClusterF(param.Parameterized):
             # clear selected compound
             self.selected_compound = ""
             self.compound_image.object = None
-            # Reset compound lifetime chart
-            self.compound_lifetime_chart.object = hv.Text(0.5, 0.5, "Select a compound in the table to view Delta Lifetime data").opts(
-                width=400, height=300, xaxis=None, yaxis=None
-            )
+            self.compound_data_chart.object = None
 
         else:
             # node has been deselected, clear everything and reset table
@@ -546,10 +543,7 @@ class ClusterF(param.Parameterized):
             # because it is more explicit for the action being taken.
             self.update_compound_grid([])  # Clear the grid
             self.compound_image.object = None
-            # Reset compound lifetime chart
-            self.compound_lifetime_chart.object = hv.Text(0.5, 0.5, "Select a compound in the table to view Delta Lifetime data").opts(
-                width=400, height=300, xaxis=None, yaxis=None
-            )
+            self.compound_data_chart.object = None
             # Reset table to show current super cluster
             self.compound_table.value = self.build_table(self.slider_widget.value)
             self.style_compound_table()
@@ -945,65 +939,63 @@ class ClusterF(param.Parameterized):
             self.library.df["SuperCluster"] == current_super_cluster_num
         ]["Compound"].tolist()
 
-    def create_compound_lifetime_chart(self, compound_id):
+    def create_compound_data_chart(self, compound_id):
         """Create a bar chart showing Delta Lifetime values for a specific compound across constructs."""
         if not hasattr(self.library, "dataset_df") or self.library.dataset_df is None:
             return hv.Text(0.5, 0.5, "No dataset loaded. Load a dataset first.").opts(
                 width=400, height=300, xaxis=None, yaxis=None
             )
-        
+
         # Filter dataset for the specific compound
         compound_data = self.library.dataset_df[
             self.library.dataset_df["Compound"] == compound_id
         ]
-        
+
         if compound_data.empty:
             return hv.Text(0.5, 0.5, f"No data found for compound {compound_id}").opts(
                 width=400, height=300, xaxis=None, yaxis=None
             )
-        
-        # Check if Delta Lifetime column exists
-        if "Delta Lifetime" not in compound_data.columns:
-            return hv.Text(0.5, 0.5, "No 'Delta Lifetime' column found in dataset").opts(
-                width=400, height=300, xaxis=None, yaxis=None
-            )
-        
+
         # Group by Construct and calculate statistics
         construct_stats = []
         scatter_data = []
-        
+
         for construct in compound_data["Construct"].unique():
             construct_data = compound_data[compound_data["Construct"] == construct]
             lifetime_values = construct_data["Delta Lifetime Z"].dropna()
-            
+
             if len(lifetime_values) > 0:
                 mean_val = lifetime_values.mean()
                 std_val = lifetime_values.std() if len(lifetime_values) > 1 else 0
-                
-                construct_stats.append({
-                    "Construct": construct,
-                    "Mean": mean_val,
-                    "Std": std_val,
-                    "Count": len(lifetime_values)
-                })
-                
+
+                construct_stats.append(
+                    {
+                        "Construct": construct,
+                        "Mean": mean_val,
+                        "Std": std_val,
+                        "Count": len(lifetime_values),
+                    }
+                )
+
                 # Add individual points for scatter overlay
                 for i, value in enumerate(lifetime_values):
-                    scatter_data.append({
-                        "Construct": construct,
-                        "Value": value,
-                        "x_pos": construct  # Use construct name as x position
-                    })
-        
+                    scatter_data.append(
+                        {
+                            "Construct": construct,
+                            "Value": value,
+                            "x_pos": construct,  # Use construct name as x position
+                        }
+                    )
+
         if not construct_stats:
-            return hv.Text(0.5, 0.5, f"No valid Delta Lifetime data for compound {compound_id}").opts(
-                width=400, height=300, xaxis=None, yaxis=None
-            )
-        
+            return hv.Text(
+                0.5, 0.5, f"No valid Delta Lifetime data for compound {compound_id}"
+            ).opts(width=400, height=300, xaxis=None, yaxis=None)
+
         # Create DataFrames
         stats_df = pd.DataFrame(construct_stats)
         scatter_df = pd.DataFrame(scatter_data)
-        
+
         # Create bar chart with error bars
         bars = hv.Bars(stats_df, ["Construct"], ["Mean", "Std"]).opts(
             color="lightblue",
@@ -1015,29 +1007,26 @@ class ClusterF(param.Parameterized):
             ylim=(-7, 7),
             xrotation=45,
             tools=["hover"],
-            show_grid=True
+            show_grid=True,
         )
-        
+
         # Add error bars
         error_bars = hv.ErrorBars(
-            [(row["Construct"], row["Mean"], row["Std"]) for _, row in stats_df.iterrows()],
-            vdims=["y", "yerr"]
-        ).opts(
-            color="black",
-            line_width=2
-        )
-        
+            [
+                (row["Construct"], row["Mean"], row["Std"])
+                for _, row in stats_df.iterrows()
+            ],
+            vdims=["y", "yerr"],
+        ).opts(color="black", line_width=2)
+
         # Create scatter plot overlay
         scatter = hv.Scatter(scatter_df, ["Construct"], ["Value"]).opts(
-            color="red",
-            size=8,
-            alpha=0.7,
-            tools=["hover"]
+            color="red", size=8, alpha=0.7, tools=["hover"]
         )
-        
+
         # Combine all elements
         chart = bars * error_bars * scatter
-        
+
         return chart
 
 
@@ -1119,7 +1108,8 @@ main[1, 0] = clusterF.category_histogram
 # Row 2, Col 1: Compound table (Tabulator)
 main[2, 0] = clusterF.compound_table
 # Row 0, Col 2: Compound lifetime chart
-main[2, 1] = clusterF.compound_lifetime_chart
+main[2, 1] = clusterF.compound_data_chart
+
 
 pn.template.FastListTemplate(
     site="ClusterF",
