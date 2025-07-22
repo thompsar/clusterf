@@ -169,22 +169,36 @@ class ChemLibrary:
 
         # Get superclusters
         # subgraph are sets, convert to list
-        self.super_clusters = [
+        super_cluster_groups = [
             list(subgraph)
             for subgraph in nx.connected_components(self.graph)
             if len(subgraph) > 1
         ]
-        self.super_clusters.sort(key=len, reverse=True)
-        # add super cluster information to dataframe
+
+        super_cluster_counts = []
+        for subgraph in super_cluster_groups:
+            mask = self.df[fine_thresh].isin(subgraph)
+            compound_count = len(self.df[mask]["Compound"])
+            super_cluster_counts.append([compound_count, subgraph])
+
+        # sort super_cluster_counts by compound count
+        super_cluster_counts.sort(key=lambda x: x[0], reverse=True)
+
+        # Map each cluster to its super cluster number (1-indexed) and count compounds
+        self.super_clusters = [
+            [super_clust_id, compound_count, sub_clusters]
+            for super_clust_id, (compound_count, sub_clusters) in enumerate(
+                super_cluster_counts, start=1
+            )
+        ]
+
         # Initialize super cluster column with NaN
         self.df["SuperCluster"] = np.nan
-
         # Map each cluster to its super cluster number (1-indexed)
-        for super_cluster_number, cluster_list in enumerate(
-            self.super_clusters, start=1
-        ):
-            mask = self.df[fine_thresh].isin(cluster_list)
-            self.df.loc[mask, "SuperCluster"] = super_cluster_number
+        for super_clust_id, compound_count, sub_clusters in self.super_clusters:
+            self.df.loc[self.df[fine_thresh].isin(sub_clusters), "SuperCluster"] = (
+                super_clust_id
+            )
 
     def build_subgraph(self, member_cluster):
         """
@@ -236,17 +250,18 @@ class ChemLibrary:
         """
         Draws hv histogram of self.supercluster size with hover and tap tools
         """
-        # Create a scatter plot of the supercluster sizes
-        self.cluster_sizes = [
-            (idx, len(cluster))
-            for idx, cluster in enumerate(self.super_clusters, start=1)
+        data = [
+            (super_clust_id, compound_count)
+            for super_clust_id, compound_count, _ in self.super_clusters
         ]
-
-        plot = hv.Scatter(self.cluster_sizes).opts(
+        # Use the new super_clusters format which already contains [super_cluster_number, compound_count]
+        plot = hv.Scatter(data).opts(
             tools=["hover", "tap"],
             width=300,
             height=200,
             size=10,
+            xlabel="Super Cluster",
+            ylabel="Number of Compounds",
         )
 
         self.cluster_chart = plot

@@ -181,12 +181,12 @@ class ClusterF(param.Parameterized):
     # Update graph view and table after slider release
     def update_throttled(self, event):
         """This function updates only when the slider stops moving (throttled)."""
-        # Note: probably ok to get rid of library.super_clusters
-        # as we are going to store super clusters as a column in the df
-        cluster_set = self.library.super_clusters[event.new - 1]
-        member_cluster = cluster_set[
-            0
-        ]  # TODO: fix this, especially now that we have super clusters
+        # Get the first cluster node from the super cluster
+        # TODO: get rid of use of super_clusters attribute and 
+        # reference dataframe instead?
+        cluster_nodes = self.library.super_clusters[event.new-1][2]
+        
+        member_cluster = cluster_nodes[0]
         self.common_substructure = None
         self.library.build_subgraph(member_cluster)
         self.initialize_graph_plot(self.library.sub_graph)
@@ -206,11 +206,12 @@ class ClusterF(param.Parameterized):
     @param.depends("cluster_slider", watch=True)
     def update_realtime(self):
         """This function updates in real-time as the slider moves."""
-        # add a red point to the cluster chart plot corresponding to the value of self.cluster_slider
-        cluster_sizes = self.library.cluster_sizes
+        # Find the compound count for the current super cluster
+        super_cluster_data = self.library.super_clusters[self.cluster_slider-1]
+        compound_count = super_cluster_data[1]
         chart = self.library.cluster_chart
         self.cluster_chart.object = chart * hv.Scatter(
-            cluster_sizes[self.cluster_slider - 1]
+            [(self.cluster_slider, compound_count)]
         ).opts(color="red", size=12)
 
     @param.depends("fine_threshold", watch=True)
@@ -295,12 +296,14 @@ class ClusterF(param.Parameterized):
         # draw the super cluster scatter plot
         chart = self.library.draw_cluster_chart()
         # highlight the first cluster
-        cluster_sizes = self.library.cluster_sizes
-        self.cluster_chart.object = chart * hv.Scatter(cluster_sizes[0]).opts(
+        first_super_cluster = self.library.super_clusters[0]
+        self.cluster_chart.object = chart * hv.Scatter([first_super_cluster]).opts(
             color="red", size=12
         )
 
-        member_cluster = self.library.super_clusters[0][0]  # TODO: fix this
+        # Get the first cluster node from the first super cluster
+        cluster_nodes = self.library.super_clusters[0][2]    
+        member_cluster = cluster_nodes[0]
         self.library.build_subgraph(member_cluster)
         self.initialize_graph_plot(self.library.sub_graph)
         self.graph_view()
@@ -348,7 +351,7 @@ class ClusterF(param.Parameterized):
                 if hasattr(self.library, "super_clusters") and super_cluster_idx < len(
                     self.library.super_clusters
                 ):
-                    cluster_list = self.library.super_clusters[super_cluster_idx]
+                    cluster_list = self.library.super_clusters[super_cluster_idx][2]
                     table_df = table_df[
                         table_df[str(self.fine_threshold)].isin(cluster_list)
                     ]
@@ -395,11 +398,11 @@ class ClusterF(param.Parameterized):
                 else:
                     # Fallback to old method
                     super_cluster = None
-                    for idx, super_cluster_list in enumerate(
-                        self.library.super_clusters
-                    ):
-                        if cluster in super_cluster_list:
-                            super_cluster = idx + 1
+                    for super_cluster_info in self.library.super_clusters:
+                        super_cluster_number = super_cluster_info[0]
+                        cluster_nodes = super_cluster_info[2]
+                        if cluster in cluster_nodes:
+                            super_cluster = super_cluster_number
                             break
 
                 if super_cluster:
