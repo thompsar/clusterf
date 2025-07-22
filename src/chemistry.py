@@ -85,18 +85,6 @@ class ChemLibrary:
 
         self.subset_df = self.standardize_df(self.subset_df)
 
-    def load_subset(self, path):
-        """
-        Backward compatibility method. Loads subset of library, populates Category column of df.
-        This method is deprecated in favor of load_dataset.
-        """
-        self.subset_df = pd.read_csv(path)
-        self.subset_df = self.standardize_df(self.subset_df)
-        self.df = self.df.merge(
-            self.subset_df[["Compound", "Category"]], on="Compound", how="left"
-        )
-        self.df["Category"] = self.df["Category"].fillna("Miss")
-
     def standardize_df(self, df):
         """
         Standardizes the columns of a dataframe
@@ -187,7 +175,7 @@ class ChemLibrary:
             if len(subgraph) > 1
         ]
         self.super_clusters.sort(key=len, reverse=True)
-        #add super cluster information to dataframe
+        # add super cluster information to dataframe
         # Initialize super cluster column with NaN
         self.df["SuperCluster"] = np.nan
 
@@ -197,7 +185,6 @@ class ChemLibrary:
         ):
             mask = self.df[fine_thresh].isin(cluster_list)
             self.df.loc[mask, "SuperCluster"] = super_cluster_number
-        
 
     def build_subgraph(self, member_cluster):
         """
