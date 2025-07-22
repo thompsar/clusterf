@@ -57,7 +57,7 @@ TODO LIST:
 NEW:
 -[ ] Switching subsets causes key error with Category, likely need to reset the color widgets and histogram.
 -[ ] Rendering compound data causes table to scroll back to the top. Seems like a persistent bug over the years in tabulator, may have to live with it for now.
--[ ] Filter out Misses from the table
+-[x] Filter out Misses from the table
 -[ ] Allow for selection of multiple compounds from the table. Draw those particular compounds in the grid. Plot their data in the compound data chart.
     - [x] Implement multi-select functionality in the compound table
     - [x] Update the compound grid to display selected compounds
@@ -105,6 +105,7 @@ class ClusterF(param.Parameterized):
     save_button = param.Action(
         lambda x: x.param.trigger("save_button"), label="Save Spreadsheet"
     )
+    show_miss_compounds = param.Boolean(default=True, label="Show Miss Compounds")
 
     # Dynamic color parameters will be added programmatically
     categories = param.List(default=[])
@@ -182,10 +183,10 @@ class ClusterF(param.Parameterized):
     def update_throttled(self, event):
         """This function updates only when the slider stops moving (throttled)."""
         # Get the first cluster node from the super cluster
-        # TODO: get rid of use of super_clusters attribute and 
+        # TODO: get rid of use of super_clusters attribute and
         # reference dataframe instead?
-        cluster_nodes = self.library.super_clusters[event.new-1][2]
-        
+        cluster_nodes = self.library.super_clusters[event.new - 1][2]
+
         member_cluster = cluster_nodes[0]
         self.common_substructure = None
         self.library.build_subgraph(member_cluster)
@@ -200,14 +201,14 @@ class ClusterF(param.Parameterized):
         if hasattr(self, "color_dict"):
             self.category_histogram.object = self.create_category_histogram()
         # self.compound_grid.svgs=[]
-        #clear selection in table
+        # clear selection in table
         self.compound_table.selection = []
 
     @param.depends("cluster_slider", watch=True)
     def update_realtime(self):
         """This function updates in real-time as the slider moves."""
         # Find the compound count for the current super cluster
-        super_cluster_data = self.library.super_clusters[self.cluster_slider-1]
+        super_cluster_data = self.library.super_clusters[self.cluster_slider - 1]
         compound_count = super_cluster_data[1]
         chart = self.library.cluster_chart
         self.cluster_chart.object = chart * hv.Scatter(
@@ -226,6 +227,43 @@ class ClusterF(param.Parameterized):
         self.cluster_graph.object = None
         self.cluster_chart.object = None
         self.slider_widget.disabled = True
+
+    @param.depends("show_miss_compounds", watch=True)
+    def toggle_miss_compounds(self):
+        """Update table display when Miss compounds toggle changes."""
+
+        if self.compound_table.visible:
+            # Preserve the current selection
+            selected_compounds = self.compound_table.value.loc[
+                self.compound_table.selection, "Compound"
+            ].values
+
+            if self.selected_nodes:
+                # If specific nodes are selected, rebuild table for those nodes
+                new_table = self.build_table(self.selected_nodes)
+                self.compound_table.value = new_table
+            else:
+                # Otherwise rebuild table for current super cluster
+                new_table = self.build_table(self.slider_widget.value)
+                self.compound_table.value = new_table
+
+            # Reapply the selection to the table
+            self.compound_table.selection = new_table[
+                new_table["Compound"].isin(selected_compounds)
+            ].index.tolist()
+
+            # Update the compound grid to reflect the filtered compounds
+            if (
+                not self.compound_table.value.empty
+                and "Compound" in self.compound_table.value.columns
+            ):
+                compounds = self.compound_table.value["Compound"].values
+                self.update_compound_grid(compounds)
+            else:
+                self.update_compound_grid([])
+
+            # Re-apply table styling
+            self.style_compound_table()
 
     @param.depends("lib_select", watch=True)
     def update_compound_df(self):
@@ -302,7 +340,7 @@ class ClusterF(param.Parameterized):
         )
 
         # Get the first cluster node from the first super cluster
-        cluster_nodes = self.library.super_clusters[0][2]    
+        cluster_nodes = self.library.super_clusters[0][2]
         member_cluster = cluster_nodes[0]
         self.library.build_subgraph(member_cluster)
         self.initialize_graph_plot(self.library.sub_graph)
@@ -367,7 +405,12 @@ class ClusterF(param.Parameterized):
                 table_df[str(self.fine_threshold)].isin(clusters_or_super_cluster)
             ]
 
+        # Filter out "Miss" compounds if toggle is disabled
+        if not self.show_miss_compounds:
+            table_df = table_df[table_df["Category"] != "Miss"]
+
         table_df = table_df[self.visible_columns].reset_index()
+
         return table_df
 
     @param.depends("search_button", watch=True)
@@ -470,7 +513,6 @@ class ClusterF(param.Parameterized):
             self.compound_image.object = None
             self.compound_data_chart.object = None
             return
-
         # Get selected row indices
         selected_indices = event.new  # always a list
         selected_compounds = self.compound_table.value.loc[
@@ -1029,7 +1071,7 @@ class ClusterF(param.Parameterized):
             show_grid=False,
             show_legend=False,
         )
-        #Note error bars and scatter do not currently support multiindex for kdims
+        # Note error bars and scatter do not currently support multiindex for kdims
         # need to find a workaround for this
         chart = bars
         return chart
@@ -1085,6 +1127,13 @@ sidebar = pn.Column(
         clusterF.param,
         parameters=["search_button", "save_button"],
         default_layout=pn.Row,
+        margin=(2, 2),
+        show_name=False,
+    ),
+    pn.Param(
+        clusterF.param,
+        parameters=["show_miss_compounds"],
+        widgets={"show_miss_compounds": pn.widgets.Checkbox},
         margin=(2, 2),
         show_name=False,
     ),
