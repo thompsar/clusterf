@@ -21,3 +21,4 @@ docker-compose.yml
 Dockerfile
 .vscode/launch.json
 .vscode/tasks.json
+Caddyfile
