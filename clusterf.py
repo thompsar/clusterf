@@ -105,7 +105,13 @@ class ClusterF(param.Parameterized):
     save_button = param.Action(
         lambda x: x.param.trigger("save_button"), label="Save Spreadsheet"
     )
-    show_miss_compounds = param.Boolean(default=True, label="Show Miss Compounds")
+    show_miss_compounds = param.Boolean(default=True)
+    toggle_miss_button = param.Action(
+        lambda x: x.param.trigger("toggle_miss_button"), label="Hide Miss Compounds"
+    )
+    retest_selected_button = param.Action(
+        lambda x: x.param.trigger("retest_selected_button"), label="Retest Selected"
+    )
 
     # Dynamic color parameters will be added programmatically
     categories = param.List(default=[])
@@ -222,15 +228,24 @@ class ClusterF(param.Parameterized):
         if "SuperCluster" in self.visible_columns:
             self.visible_columns.remove("SuperCluster")
         self.compound_table.visible = False
+        self.param.trigger('toggle_miss_button')  # Refresh button panel visibility
         self.compound_image.object = None
         self.compound_grid.svgs = []
         self.cluster_graph.object = None
         self.cluster_chart.object = None
         self.slider_widget.disabled = True
 
-    @param.depends("show_miss_compounds", watch=True)
+    @param.depends("toggle_miss_button", watch=True)
     def toggle_miss_compounds(self):
-        """Update table display when Miss compounds toggle changes."""
+        """Update table display when Miss compounds toggle button is pressed."""
+        # Toggle the boolean value
+        self.show_miss_compounds = not self.show_miss_compounds
+        
+        # Update button label based on current state
+        if self.show_miss_compounds:
+            self.param.toggle_miss_button.label = "Hide Misses"
+        else:
+            self.param.toggle_miss_button.label = "Show Misses"
 
         if self.compound_table.visible:
             # Preserve the current selection
@@ -265,6 +280,41 @@ class ClusterF(param.Parameterized):
             # Re-apply table styling
             self.style_compound_table()
 
+    @param.depends("retest_selected_button", watch=True)
+    def retest_selected_compounds(self):
+        """Toggle Retest status for all selected compounds in the table."""
+        if not self.compound_table.selection:
+            return
+            
+        # Get selected row indices
+        selected_indices = self.compound_table.selection
+        selected_compounds = self.compound_table.value.loc[selected_indices, "Compound"].values
+        
+        compound_mask = self.library.df["Compound"].isin(selected_compounds)
+        self.library.df.loc[compound_mask, "Retest"] = ~self.library.df.loc[compound_mask, "Retest"]
+
+        # update the dataset dataframe
+        dataset_mask = self.library.dataset_df["Compound"].isin(selected_compounds)
+        self.library.dataset_df.loc[dataset_mask, "Retest"] = ~self.library.dataset_df.loc[dataset_mask, "Retest"]
+
+        # update the subset dataframe
+        subset_mask = self.library.subset_df["Compound"].isin(selected_compounds)
+        self.library.subset_df.loc[subset_mask, "Retest"] = ~self.library.subset_df.loc[subset_mask, "Retest"]
+                
+        # Refresh the table to show updated values
+        if self.selected_nodes:
+            new_table = self.build_table(self.selected_nodes)
+        else:
+            new_table = self.build_table(self.slider_widget.value)
+        
+        self.compound_table.value = new_table
+        self.style_compound_table()
+        
+        # Restore the selection
+        self.compound_table.selection = selected_indices
+        
+        print(f"Toggled Retest status for {len(selected_compounds)} compounds")
+
     @param.depends("lib_select", watch=True)
     def update_compound_df(self):
         # BUG: Changing library results in key error due to missing columns in self.visible_columns
@@ -273,6 +323,7 @@ class ClusterF(param.Parameterized):
         self.compound_input = ""
         self.selected_compound = ""
         self.compound_table.visible = False
+        self.param.trigger('toggle_miss_button')  # Refresh button panel visibility
         self.compound_image.object = None
 
     @param.depends("dataset_select", watch=True)
@@ -299,6 +350,7 @@ class ClusterF(param.Parameterized):
 
         # Clear any existing clustering results from UI
         self.compound_table.visible = False
+        self.param.trigger('toggle_miss_button')  # Refresh button panel visibility
         self.compound_image.object = None
         self.compound_grid.svgs = []
         self.cluster_graph.object = None
@@ -357,6 +409,7 @@ class ClusterF(param.Parameterized):
         self.compound_table.value = new_table
         self.style_compound_table()
         self.compound_table.visible = True
+        self.param.trigger('toggle_miss_button')  # Refresh button panel visibility
 
         compounds = new_table["Compound"].values
         self.update_compound_grid(compounds)
@@ -1079,6 +1132,48 @@ class ClusterF(param.Parameterized):
         chart = bars
         return chart
 
+    @param.depends("toggle_miss_button")
+    def get_table_controls_panel(self):
+        """Create a panel with table control buttons, only visible when table is visible."""
+        if not self.compound_table.visible:
+            return pn.Spacer(width=0, height=0)
+        
+        return pn.Column(
+            pn.Param(
+                self.param,
+                parameters=["toggle_miss_button"],
+                widgets={
+                    "toggle_miss_button": {
+                        "type": pn.widgets.Button,
+                        "width": 120,
+                        "height": 28,
+                    }
+                },
+                margin=(0, 0, 2, 0),
+                show_name=False,
+                sizing_mode="fixed",
+                width=122,
+            ),
+            pn.Param(
+                self.param,
+                parameters=["retest_selected_button"],
+                widgets={
+                    "retest_selected_button": {
+                        "type": pn.widgets.Button,
+                        "width": 120,
+                        "height": 28,
+                    }
+                },
+                margin=(0, 0, 0, 0),
+                show_name=False,
+                sizing_mode="fixed",
+                width=122,
+            ),
+            sizing_mode="fixed",
+            width=122,
+            margin=(0, 2, 0, 0),
+        )
+
 
 class MockEvent:
     def __init__(self, new=None, row=None):
@@ -1133,13 +1228,6 @@ sidebar = pn.Column(
         margin=(2, 2),
         show_name=False,
     ),
-    pn.Param(
-        clusterF.param,
-        parameters=["show_miss_compounds"],
-        widgets={"show_miss_compounds": pn.widgets.Checkbox},
-        margin=(2, 2),
-        show_name=False,
-    ),
     pn.pane.Markdown(clusterF.param.selected_compound, margin=(0, 5)),
     clusterF.compound_image,
     margin=0,
@@ -1163,7 +1251,12 @@ main[0:2, 1] = clusterF.compound_grid.view()
 # Row 1, Col 0: Category histogram
 main[1, 0] = clusterF.category_histogram
 # Row 2, Col 1: Compound table (Tabulator)
-main[2, 0] = clusterF.compound_table
+main[2, 0] = pn.Row(
+    clusterF.get_table_controls_panel,
+    clusterF.compound_table,
+    sizing_mode="stretch_width",
+    margin=0,
+)
 # Row 0, Col 2: Compound lifetime chart
 main[2, 1] = clusterF.compound_data_chart
 
