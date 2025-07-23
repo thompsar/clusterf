@@ -48,15 +48,20 @@ class ChemLibrary:
         """
         self.dataset_df = pd.read_csv(path)
         self.dataset_df = self.standardize_df(self.dataset_df)
+        if "Retest" not in self.dataset_df.columns:
+            self.dataset_df["Retest"] = False
 
         # Create subset_df with unique compounds and their categories
         self.create_subset_df()
 
         # Merge categories into main library df
         self.df = self.df.merge(
-            self.subset_df[["Compound", "Category"]], on="Compound", how="left"
+            self.subset_df[["Compound", "Category", "Retest"]],
+            on="Compound",
+            how="left",
         )
         self.df["Category"] = self.df["Category"].fillna("Miss")
+        self.df["Retest"] = self.df["Retest"].astype(bool).fillna(False)
 
     def create_subset_df(self):
         """
@@ -75,7 +80,7 @@ class ChemLibrary:
                 clustering_columns.append(column)
             except ValueError:
                 continue
-        columns = ["Compound"] + clustering_columns + ["Category"]
+        columns = ["Compound"] + clustering_columns + ["Category", "Retest"]
         # Create subset_df with unique compounds
         self.subset_df = (
             self.dataset_df[self.dataset_df.Category != "Miss"][columns]

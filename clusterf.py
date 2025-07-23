@@ -267,6 +267,7 @@ class ClusterF(param.Parameterized):
 
     @param.depends("lib_select", watch=True)
     def update_compound_df(self):
+        # BUG: Changing library results in key error due to missing columns in self.visible_columns
         self.library = ChemLibrary(self.lib_select)
         self.compound_table.value = self.library.df[self.visible_columns]
         self.compound_input = ""
@@ -283,6 +284,7 @@ class ClusterF(param.Parameterized):
 
         # Load the dataset
         self.library.load_dataset(self.dataset_select)
+        self.visible_columns = self.visible_columns + ["Category", "Retest"]
 
         # Create color pickers for categories found in the subset
         if (
@@ -333,6 +335,7 @@ class ClusterF(param.Parameterized):
         self.update_cluster_colors()
         # draw the super cluster scatter plot
         chart = self.library.draw_cluster_chart()
+
         # highlight the first cluster
         first_super_cluster = self.library.super_clusters[0]
         self.cluster_chart.object = chart * hv.Scatter([first_super_cluster]).opts(
@@ -348,8 +351,8 @@ class ClusterF(param.Parameterized):
 
         # Add SuperCluster to visible columns if not already there
         if "SuperCluster" not in self.visible_columns:
-            self.visible_columns.append("SuperCluster")
-        self.visible_columns.append("Category")
+            self.visible_columns.insert(-2, "SuperCluster")
+        # self.visible_columns = self.visible_columns + ["Category", "Retest"]
         new_table = self.build_table(1)  # First super cluster
         self.compound_table.value = new_table
         self.style_compound_table()
