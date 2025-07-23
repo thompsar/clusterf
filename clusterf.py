@@ -105,6 +105,9 @@ class ClusterF(param.Parameterized):
     save_button = param.Action(
         lambda x: x.param.trigger("save_button"), label="Save Spreadsheet"
     )
+    save_dataset_button = param.Action(
+        lambda x: x.param.trigger("save_dataset_button"), label="Save Dataset"
+    )
     show_miss_compounds = param.Boolean(default=True)
     toggle_miss_button = param.Action(
         lambda x: x.param.trigger("toggle_miss_button"), label="Hide Miss Compounds"
@@ -549,6 +552,20 @@ class ClusterF(param.Parameterized):
         # NOTE: see link (1) at bottom of this file if you want to implment saving
         # the compound image to the excel file
         self.compound_table.value.to_excel("compound_list.xlsx", index=False)
+
+    @param.depends("save_dataset_button", watch=True)
+    def save_dataset(self):
+        """Save the current dataset with all modifications back to the original file."""
+        if not hasattr(self.library, "dataset_df") or self.dataset_select is None:
+            print("No dataset loaded to save")
+            return
+        
+        try:
+            # Save the dataset_df back to the original file
+            self.library.dataset_df.to_csv(self.dataset_select, index=False)
+            print(f"Dataset saved successfully to {self.dataset_select}")
+        except Exception as e:
+            print(f"Error saving dataset: {e}")
 
     def on_table_click(self, event):
         compound = self.compound_table.value.loc[event.row, "Compound"]
@@ -1223,7 +1240,7 @@ sidebar = pn.Column(
     ),
     pn.Param(
         clusterF.param,
-        parameters=["search_button", "save_button"],
+        parameters=["search_button", "save_button", "save_dataset_button"],
         default_layout=pn.Row,
         margin=(2, 2),
         show_name=False,
