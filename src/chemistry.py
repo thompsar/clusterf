@@ -61,7 +61,10 @@ class ChemLibrary:
             how="left",
         )
         self.df["Category"] = self.df["Category"].fillna("Miss")
-        self.df["Retest"] = self.df["Retest"].astype(bool).fillna(False)
+        self.df["Retest"] = self.df["Retest"].fillna(False).astype(bool).infer_objects(copy=False)  
+        # save for later debugging
+        # print('retest column value counts:')
+        # print(self.df['Retest'].value_counts())
 
     def create_subset_df(self):
         """
