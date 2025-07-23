@@ -263,27 +263,6 @@ class ChemLibrary:
         self.graph_plot = plot * labels.opts(text_font_size="12pt", text_color="black")
         return self.graph_plot
 
-    def draw_cluster_chart(self):
-        """
-        Draws hv histogram of self.supercluster size with hover and tap tools
-        """
-        data = [
-            (super_clust_id, compound_count)
-            for super_clust_id, compound_count, _ in self.super_clusters
-        ]
-        # Use the new super_clusters format which already contains [super_cluster_number, compound_count]
-        plot = hv.Scatter(data).opts(
-            tools=["hover", "tap"],
-            width=300,
-            height=200,
-            size=10,
-            xlabel="Super Cluster",
-            ylabel="Number of Compounds",
-        )
-
-        self.cluster_chart = plot
-        return self.cluster_chart
-
     def get_compounds(self, compound_ids):
         """Gets compound(s) info from library dataframe
 

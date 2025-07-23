@@ -219,7 +219,7 @@ class ClusterF(param.Parameterized):
         # Find the compound count for the current super cluster
         super_cluster_data = self.library.super_clusters[self.cluster_slider - 1]
         compound_count = super_cluster_data[1]
-        chart = self.library.cluster_chart
+        chart = self.draw_cluster_chart()
         self.cluster_chart.object = chart * hv.Scatter(
             [(self.cluster_slider, compound_count)]
         ).opts(color="red", size=12)
@@ -389,7 +389,7 @@ class ClusterF(param.Parameterized):
         self.slider_widget.disabled = False
         self.update_cluster_colors()
         # draw the super cluster scatter plot
-        chart = self.library.draw_cluster_chart()
+        chart = self.draw_cluster_chart()
 
         # highlight the first cluster
         first_super_cluster = self.library.super_clusters[0]
@@ -1148,6 +1148,26 @@ class ClusterF(param.Parameterized):
         # need to find a workaround for this
         chart = bars
         return chart
+
+    def draw_cluster_chart(self):
+        """
+        Draws hv scatter plot of supercluster sizes with hover and tap tools
+        """
+        data = [
+            (super_clust_id, compound_count)
+            for super_clust_id, compound_count, _ in self.library.super_clusters
+        ]
+        # Use the new super_clusters format which already contains [super_cluster_number, compound_count]
+        plot = hv.Scatter(data).opts(
+            tools=["hover", "tap"],
+            width=300,
+            height=200,
+            size=10,
+            xlabel="Super Cluster",
+            ylabel="# Compounds",
+        )
+
+        return plot
 
     @param.depends("toggle_miss_button")
     def get_table_controls_panel(self):
