@@ -50,7 +50,7 @@ class ChemLibrary:
         self.dataset_df = self.standardize_df(self.dataset_df)
         if "Retest" not in self.dataset_df.columns:
             self.dataset_df["Retest"] = False
-
+        
         # Create subset_df with unique compounds and their categories
         self.create_subset_df()
 
@@ -61,7 +61,15 @@ class ChemLibrary:
             how="left",
         )
         self.df["Category"] = self.df["Category"].fillna("Miss")
-        self.df["Retest"] = self.df["Retest"].fillna(False).astype(bool).infer_objects(copy=False)  
+        #Note below, converting to 'boolean' and not 'bool' was necessary to 
+        # avoid FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and 
+        # will change in a future version. Call result.infer_objects(copy=False) instead. 
+        # To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+        # except below line also throws FutureWarning:
+        # self.df["Retest"] = self.df["Retest"].fillna(False).astype(bool).infer_objects(copy=False)
+        self.df["Retest"] = self.df["Retest"].fillna(False)
+        self.df["Retest"] = self.df["Retest"].astype('boolean').fillna(False)
+        
         # save for later debugging
         # print('retest column value counts:')
         # print(self.df['Retest'].value_counts())
@@ -90,6 +98,7 @@ class ChemLibrary:
             .drop_duplicates(subset="Compound")
             .reset_index(drop=True)
         )
+        self.subset_df["Retest"] = self.subset_df["Retest"].astype('boolean').fillna(False)
 
         self.subset_df = self.standardize_df(self.subset_df)
 
