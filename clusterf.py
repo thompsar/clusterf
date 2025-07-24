@@ -971,7 +971,6 @@ class ClusterF(param.Parameterized):
         self.color_dict = {
             category: widget.value for category, widget in self.color_widgets.items()
         }
-        self.color_dict["Miss"] = "#999999"  # Default color for Miss category
 
         fine_threshold = str(self.fine_threshold)
 
@@ -1112,17 +1111,13 @@ class ClusterF(param.Parameterized):
 
         compound_df = self.library.dataset_df[
             self.library.dataset_df["Compound"].isin(compound_ids)
-        ].copy()
-        # make a Color column in compound_df by using self.color_dict to map
-        self.color_dict["Miss"] = "#999999"
-        compound_df["Color"] = compound_df["Category"].map(self.color_dict)
+        ]
 
         if compound_df.empty:
             return hv.Text(0.5, 0.5, "No data available for selected compounds").opts(
                 width=600, height=400
             )
 
-        # Create DataFrames
         stats_df = (
             compound_df.groupby(["Compound", "Construct"])[metric]
             .agg(["mean", "std"])
@@ -1131,9 +1126,14 @@ class ClusterF(param.Parameterized):
         )
 
         stats_df = stats_df.merge(
-            compound_df[["Compound", "Category", "Color"]].drop_duplicates(),
+            compound_df[["Compound", "Category"]].drop_duplicates(),
             on="Compound",
             how="left",
+        )
+        # make a Color column in compound_df by using self.color_dict to map
+        stats_df["Color"] = stats_df["Category"].map(self.color_dict)
+        stats_df.loc[stats_df["Color"] == "none", "Color"] = (
+            "#999999"  # Default color for missing categories
         )
 
         # Create title based on number of compounds
