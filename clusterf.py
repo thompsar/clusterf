@@ -955,6 +955,13 @@ class ClusterF(param.Parameterized):
                 if not current_table.empty and "Compound" in current_table.columns:
                     compounds = current_table["Compound"].values
                     self.update_compound_grid(compounds)
+            # Update the compound data chart with new colors
+            if hasattr(self, "compound_data_chart") and self.compound_data_chart.object is not None:
+                # Get currently selected compounds from the table
+                if hasattr(self, "compound_table") and self.compound_table.selection:
+                    selected_indices = self.compound_table.selection
+                    selected_compounds = self.compound_table.value.loc[selected_indices, "Compound"].values
+                    self.compound_data_chart.object = self.create_compound_data_chart(selected_compounds)
             # style the compound table with the new colors
             if hasattr(self, "compound_table"):
                 self.compound_table.value = (
