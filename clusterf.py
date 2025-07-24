@@ -231,7 +231,7 @@ class ClusterF(param.Parameterized):
         if "SuperCluster" in self.visible_columns:
             self.visible_columns.remove("SuperCluster")
         self.compound_table.visible = False
-        self.param.trigger('toggle_miss_button')  # Refresh button panel visibility
+        self.param.trigger("toggle_miss_button")  # Refresh button panel visibility
         self.compound_image.object = None
         self.compound_grid.svgs = []
         self.cluster_graph.object = None
@@ -243,7 +243,7 @@ class ClusterF(param.Parameterized):
         """Update table display when Miss compounds toggle button is pressed."""
         # Toggle the boolean value
         self.show_miss_compounds = not self.show_miss_compounds
-        
+
         # Update button label based on current state
         if self.show_miss_compounds:
             self.param.toggle_miss_button.label = "Hide Misses"
@@ -288,34 +288,42 @@ class ClusterF(param.Parameterized):
         """Toggle Retest status for all selected compounds in the table."""
         if not self.compound_table.selection:
             return
-            
+
         # Get selected row indices
         selected_indices = self.compound_table.selection
-        selected_compounds = self.compound_table.value.loc[selected_indices, "Compound"].values
-        
+        selected_compounds = self.compound_table.value.loc[
+            selected_indices, "Compound"
+        ].values
+
         compound_mask = self.library.df["Compound"].isin(selected_compounds)
-        self.library.df.loc[compound_mask, "Retest"] = ~self.library.df.loc[compound_mask, "Retest"]
+        self.library.df.loc[compound_mask, "Retest"] = ~self.library.df.loc[
+            compound_mask, "Retest"
+        ]
 
         # update the dataset dataframe
         dataset_mask = self.library.dataset_df["Compound"].isin(selected_compounds)
-        self.library.dataset_df.loc[dataset_mask, "Retest"] = ~self.library.dataset_df.loc[dataset_mask, "Retest"]
+        self.library.dataset_df.loc[
+            dataset_mask, "Retest"
+        ] = ~self.library.dataset_df.loc[dataset_mask, "Retest"]
 
         # update the subset dataframe
         subset_mask = self.library.subset_df["Compound"].isin(selected_compounds)
-        self.library.subset_df.loc[subset_mask, "Retest"] = ~self.library.subset_df.loc[subset_mask, "Retest"]
-                
+        self.library.subset_df.loc[subset_mask, "Retest"] = ~self.library.subset_df.loc[
+            subset_mask, "Retest"
+        ]
+
         # Refresh the table to show updated values
         if self.selected_nodes:
             new_table = self.build_table(self.selected_nodes)
         else:
             new_table = self.build_table(self.slider_widget.value)
-        
+
         self.compound_table.value = new_table
         self.style_compound_table()
-        
+
         # Restore the selection
         self.compound_table.selection = selected_indices
-        
+
         print(f"Toggled Retest status for {len(selected_compounds)} compounds")
 
     @param.depends("lib_select", watch=True)
@@ -326,7 +334,7 @@ class ClusterF(param.Parameterized):
         self.compound_input = ""
         self.selected_compound = ""
         self.compound_table.visible = False
-        self.param.trigger('toggle_miss_button')  # Refresh button panel visibility
+        self.param.trigger("toggle_miss_button")  # Refresh button panel visibility
         self.compound_image.object = None
 
     @param.depends("dataset_select", watch=True)
@@ -353,7 +361,7 @@ class ClusterF(param.Parameterized):
 
         # Clear any existing clustering results from UI
         self.compound_table.visible = False
-        self.param.trigger('toggle_miss_button')  # Refresh button panel visibility
+        self.param.trigger("toggle_miss_button")  # Refresh button panel visibility
         self.compound_image.object = None
         self.compound_grid.svgs = []
         self.cluster_graph.object = None
@@ -412,7 +420,7 @@ class ClusterF(param.Parameterized):
         self.compound_table.value = new_table
         self.style_compound_table()
         self.compound_table.visible = True
-        self.param.trigger('toggle_miss_button')  # Refresh button panel visibility
+        self.param.trigger("toggle_miss_button")  # Refresh button panel visibility
 
         compounds = new_table["Compound"].values
         self.update_compound_grid(compounds)
@@ -559,7 +567,7 @@ class ClusterF(param.Parameterized):
         if not hasattr(self.library, "dataset_df") or self.dataset_select is None:
             print("No dataset loaded to save")
             return
-        
+
         try:
             # Save the dataset_df back to the original file
             self.library.dataset_df.to_csv(self.dataset_select, index=False)
@@ -595,6 +603,9 @@ class ClusterF(param.Parameterized):
         # Update compound grid with selected compounds
         self.update_compound_grid(selected_compounds)
         # Update compound data chart with selected compounds
+        # self.compound_data_chart.object = self.create_compound_data_scatter(
+        #     selected_compounds
+        # )
         self.compound_data_chart.object = self.create_compound_data_chart(
             selected_compounds
         )
@@ -960,6 +971,7 @@ class ClusterF(param.Parameterized):
         self.color_dict = {
             category: widget.value for category, widget in self.color_widgets.items()
         }
+        self.color_dict["Miss"] = "#999999"  # Default color for Miss category
 
         fine_threshold = str(self.fine_threshold)
 
@@ -1100,8 +1112,86 @@ class ClusterF(param.Parameterized):
 
         compound_df = self.library.dataset_df[
             self.library.dataset_df["Compound"].isin(compound_ids)
+        ].copy()
+        # make a Color column in compound_df by using self.color_dict to map
+        self.color_dict["Miss"] = "#999999"
+        compound_df["Color"] = compound_df["Category"].map(self.color_dict)
+
+        if compound_df.empty:
+            return hv.Text(0.5, 0.5, "No data available for selected compounds").opts(
+                width=600, height=400
+            )
+
+        # Create DataFrames
+        stats_df = (
+            compound_df.groupby(["Compound", "Construct"])[metric]
+            .agg(["mean", "std"])
+            .reset_index()
+            .rename(columns={"mean": "Mean", "std": "Std"})
+        )
+
+        stats_df = stats_df.merge(
+            compound_df[["Compound", "Category", "Color"]].drop_duplicates(),
+            on="Compound",
+            how="left",
+        )
+
+        # Create title based on number of compounds
+        if len(compound_ids) == 1:
+            title = f"Delta Lifetime Z for Compound {compound_ids[0]}"
+        else:
+            title = f"Delta Lifetime Z for {len(compound_ids)} Compounds"
+
+        # Calculate symmetrical y-axis limits based on data
+        max_abs_value = max(abs(stats_df["Mean"].min()), abs(stats_df["Mean"].max()))
+        # Add some padding and ensure we can see ±4 lines
+        y_limit = max(max_abs_value * 1.1, 4.5)
+
+        # Create bar chart
+        bars = hv.Bars(
+            stats_df,
+            kdims=["Construct", "Compound"],
+            vdims=["Mean", "Category", "Color"],
+        ).opts(
+            color="Color",
+            width=600,
+            height=400,
+            title=title,
+            ylabel=metric,
+            xlabel="Construct",
+            ylim=(-y_limit, y_limit),
+            xrotation=45,
+            tools=["hover"],
+            show_grid=True,
+            show_legend=True,
+            legend_position="right",
+        )
+
+        # Add horizontal reference lines at ±4
+        hline_pos4 = hv.HLine(4).opts(
+            color="red", line_dash="dashed", line_width=2, alpha=0.7
+        )
+        hline_neg4 = hv.HLine(-4).opts(
+            color="red", line_dash="dashed", line_width=2, alpha=0.7
+        )
+
+        # Combine bars with reference lines
+        chart = bars * hline_pos4 * hline_neg4
+        return chart
+
+    def create_compound_data_scatter(self, compound_ids, metric="Delta Lifetime Z"):
+        """Create a scatter plot showing Delta Lifetime values for one or more compounds across constructs."""
+
+        compound_df = self.library.dataset_df[
+            self.library.dataset_df["Compound"].isin(compound_ids)
         ]
 
+        if compound_df.empty:
+            return hv.Text(0.5, 0.5, "No data available for selected compounds").opts(
+                width=600, height=400
+            )
+
+        # Color palette for constructs
         color_palette = [
             "#1f77b4",
             "#ff7f0e",
@@ -1130,9 +1220,12 @@ class ClusterF(param.Parameterized):
             title = f"Delta Lifetime Z for {len(compound_ids)} Compounds"
 
         # Create bar chart with error bars
-        bars = hv.Bars(stats_df, kdims=["Construct", "Compound"], vdims=["Mean"]).opts(
-            color="Compound",
+        scatter = hv.Scatter(
+            stats_df, kdims=["Compound"], vdims=["Mean", "Construct"]
+        ).opts(
+            color="Construct",
             cmap=color_palette,
+            size=8,
             width=600,
             height=400,
             title=title,
@@ -1144,10 +1237,8 @@ class ClusterF(param.Parameterized):
             show_grid=False,
             show_legend=False,
         )
-        # Note error bars and scatter do not currently support multiindex for kdims
-        # need to find a workaround for this
-        chart = bars
-        return chart
+
+        return scatter
 
     def draw_cluster_chart(self):
         """
@@ -1174,7 +1265,7 @@ class ClusterF(param.Parameterized):
         """Create a panel with table control buttons, only visible when table is visible."""
         if not self.compound_table.visible:
             return pn.Spacer(width=0, height=0)
-        
+
         return pn.Column(
             pn.Param(
                 self.param,
