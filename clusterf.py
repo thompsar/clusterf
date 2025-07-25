@@ -68,20 +68,35 @@ NEW:
 """
 
 
+# def category_sort_key(category):
+#     category_str = str(category).lower()
+#     if (
+#         "hit" in category_str
+#         and "(nr)" not in category_str
+#         and "questionable" not in category_str
+#     ):
+#         return (0, category)  # Highest priority
+#     elif "(nr)" in category_str or "questionable" in category_str:
+#         return (1, category)  # Second priority
+#     elif "interfering" in category_str:
+#         return (2, category)  # Third priority
+#     else:
+#         return (3, category)  # Lowest priority (includes "Miss" and others)
+
 def category_sort_key(category):
     category_str = str(category).lower()
     if (
-        "hit" in category_str
-        and "(nr)" not in category_str
-        and "questionable" not in category_str
+        "universal" in category_str
     ):
         return (0, category)  # Highest priority
-    elif "(nr)" in category_str or "questionable" in category_str:
+    elif "selective" in category_str:
         return (1, category)  # Second priority
-    elif "interfering" in category_str:
+    elif "bidirectional" in category_str:
         return (2, category)  # Third priority
+    elif "interfering" in category_str:
+        return (3, category)  # Third priority
     else:
-        return (3, category)  # Lowest priority (includes "Miss" and others)
+        return (4, category)  # Lowest priority (includes "Miss" and others)
 
 
 class ClusterF(param.Parameterized):
@@ -312,6 +327,10 @@ class ClusterF(param.Parameterized):
             subset_mask, "Retest"
         ]
 
+        # Also update dataset_df with current clustering and Retest information
+        if hasattr(self.library, 'dataset_df') and hasattr(self.library, 'super_clusters'):
+            self.library.update_dataset_with_clustering(self.fine_threshold, self.coarse_threshold)
+
         # Refresh the table to show updated values
         if self.selected_nodes:
             new_table = self.build_table(self.selected_nodes)
@@ -376,6 +395,7 @@ class ClusterF(param.Parameterized):
             # dataset in the list is selected and wont trigger load_dataset_df
             # probably should fix this...someday...
             self.load_dataset_df()
+            
 
         self.slider_widget.disabled = True
         # ensure coarse threshold is greater than fine threshold
@@ -389,6 +409,9 @@ class ClusterF(param.Parameterized):
             # implement some version of below
             # self.library.save_dataset(self.dataset_select)
         self.library.build_graph(self.fine_threshold, self.coarse_threshold)
+
+        # Update dataset_df with clustering information and current Retest values
+        self.library.update_dataset_with_clustering(self.fine_threshold, self.coarse_threshold)
 
         self.param.cluster_slider.objects = list(
             range(1, len(self.library.super_clusters) + 1)
@@ -567,11 +590,16 @@ class ClusterF(param.Parameterized):
         if not hasattr(self.library, "dataset_df") or self.dataset_select is None:
             print("No dataset loaded to save")
             return
-
+        
         try:
+            # Ensure dataset is up to date with latest clustering and Retest info
+            if hasattr(self.library, 'super_clusters'):
+                self.library.update_dataset_with_clustering(self.fine_threshold, self.coarse_threshold)
+            
             # Save the dataset_df back to the original file
             self.library.dataset_df.to_csv(self.dataset_select, index=False)
-            print(f"Dataset saved successfully to {self.dataset_select}")
+
+            
         except Exception as e:
             print(f"Error saving dataset: {e}")
 

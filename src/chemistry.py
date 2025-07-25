@@ -47,6 +47,11 @@ class ChemLibrary:
         Expects dataset to have Category column pre-populated, including "Miss".
         """
         self.dataset_df = pd.read_csv(path)
+        #drop super cluster column if it exists
+        # since dataset will have na for some values and dont want to deal with those for now.
+        if "SuperCluster" in self.dataset_df.columns:
+            self.dataset_df = self.dataset_df.drop(columns=["SuperCluster"])
+
         self.dataset_df = self.standardize_df(self.dataset_df)
         if "Retest" not in self.dataset_df.columns:
             self.dataset_df["Retest"] = False
@@ -216,6 +221,47 @@ class ChemLibrary:
             self.df.loc[self.df[fine_thresh].isin(sub_clusters), "SuperCluster"] = (
                 super_clust_id
             )
+
+    def update_dataset_with_clustering(self, fine_thresh, coarse_thresh):
+        """
+        Update dataset_df with clustering information and current Retest values.
+        This should be called after clustering is complete.
+        """
+        if not hasattr(self, 'dataset_df'):
+            return
+        # Get clustering and category information from the main library df
+        cluster_info = self.df[['Compound', str(fine_thresh), 'SuperCluster', 'Retest']].copy()
+        
+        # Remove existing clustering columns from dataset_df if they exist
+        columns_to_drop = []
+        if 'SuperCluster' in self.dataset_df.columns:
+            columns_to_drop.append('SuperCluster')
+        if str(fine_thresh) in self.dataset_df.columns:
+            columns_to_drop.append(str(fine_thresh))
+        if str(coarse_thresh) in self.dataset_df.columns:
+            columns_to_drop.append(str(coarse_thresh))
+        if 'Retest' in self.dataset_df.columns:
+            columns_to_drop.append('Retest')
+        
+        if columns_to_drop:
+            self.dataset_df = self.dataset_df.drop(columns=columns_to_drop)
+        
+        # Merge clustering information into dataset_df
+        self.dataset_df = self.dataset_df.merge(
+            cluster_info,
+            on='Compound',
+            how='left',
+        )
+        
+        
+        # # Add coarse clustering information from subset_df if it exists
+        # if hasattr(self, 'subset_df') and str(coarse_thresh) in self.subset_df.columns:
+        #     coarse_info = self.subset_df[['Compound', str(coarse_thresh)]].copy()
+        #     self.dataset_df = self.dataset_df.merge(
+        #         coarse_info,
+        #         on='Compound',
+        #         how='left'
+            # )
 
     def build_subgraph(self, member_cluster):
         """
