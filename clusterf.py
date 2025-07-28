@@ -104,7 +104,7 @@ class ClusterF(param.Parameterized):
 
     # Widgets
     lib_select = param.Selector(objects=libraries, default=libraries[1])
-    fine_threshold = param.Number(0.2)
+    fine_threshold = param.Selector(objects=[0.2], default=0.2)
     coarse_threshold = param.Number(0.4)
     dataset_select = param.FileSelector(path=os.path.join("compound_subsets", "*.csv*"))
     compound_input = param.String()
@@ -155,6 +155,10 @@ class ClusterF(param.Parameterized):
         ]
 
         self.library = ChemLibrary(self.lib_select)
+        
+        # Update fine threshold options based on loaded library
+        self.update_fine_threshold_options()
+        
         self.color_widgets = {}
         self.color_collapse = None
         self.visible_columns = ["Compound", str(self.fine_threshold)]
@@ -349,6 +353,10 @@ class ClusterF(param.Parameterized):
     def update_compound_df(self):
         # BUG: Changing library results in key error due to missing columns in self.visible_columns
         self.library = ChemLibrary(self.lib_select)
+        
+        # Update fine threshold options based on new library
+        self.update_fine_threshold_options()
+        
         self.compound_table.value = self.library.df[self.visible_columns]
         self.compound_input = ""
         self.selected_compound = ""
@@ -451,6 +459,39 @@ class ClusterF(param.Parameterized):
         # Initialize the category histogram for the first super cluster
         if hasattr(self, "color_dict"):
             self.category_histogram.object = self.create_category_histogram()
+
+    def get_available_fine_thresholds(self):
+        """Get available fine threshold values from the library dataframe."""
+        if not hasattr(self.library, 'df') or self.library.df is None:
+            return [0.2]  # Default threshold if no data loaded
+        
+        available_thresholds = []
+        for column in self.library.df.columns:
+            try:
+                # Check if column name can be converted to float (clustering threshold)
+                threshold_value = float(column)
+                # Only include reasonable threshold values (between 0.05 and 0.8)
+                if 0.05 <= threshold_value <= 0.8:
+                    available_thresholds.append(threshold_value)
+            except ValueError:
+                continue
+        
+        # Sort thresholds and return, or default if none found
+        if available_thresholds:
+            return sorted(available_thresholds)
+        else:
+            return [0.2]  # Default threshold if no clustering columns found
+
+    def update_fine_threshold_options(self):
+        """Update the fine threshold selector options based on available data."""
+        available_thresholds = self.get_available_fine_thresholds()
+        
+        # Update the parameter objects
+        self.param.fine_threshold.objects = available_thresholds
+        
+        # Set default to first available threshold if current value is not available
+        if self.fine_threshold not in available_thresholds:
+            self.fine_threshold = available_thresholds[0]
 
     def build_table(self, clusters_or_super_cluster):
         """
