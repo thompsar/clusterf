@@ -46,7 +46,7 @@ class ChemLibrary:
         Creates both dataset_df (full dataset) and subset_df (unique compounds with categories).
         Expects dataset to have Category column pre-populated, including "Miss".
         """
-        self.dataset_df = pd.read_csv(path)
+        self.dataset_df = pd.read_csv(path, dtype={"Sub Categories": str})
         #drop super cluster column if it exists
         # since dataset will have na for some values and dont want to deal with those for now.
         if "SuperCluster" in self.dataset_df.columns:
