@@ -86,17 +86,19 @@ NEW:
 def category_sort_key(category):
     category_str = str(category).lower()
     if (
-        "universal" in category_str
+        "selective" in category_str
     ):
         return (0, category)  # Highest priority
-    elif "selective" in category_str:
+    elif "universal" in category_str:
         return (1, category)  # Second priority
+    elif 'increaser' in category_str or 'decreaser' in category_str:
+        return (2, category)
     elif "bidirectional" in category_str:
-        return (2, category)  # Third priority
-    elif "interfering" in category_str:
         return (3, category)  # Third priority
+    elif "interfering" in category_str:
+        return (4, category)  # Third priority
     else:
-        return (4, category)  # Lowest priority (includes "Miss" and others)
+        return (5, category)  # Lowest priority (includes "Miss" and others)
 
 
 class ClusterF(param.Parameterized):
@@ -106,7 +108,7 @@ class ClusterF(param.Parameterized):
     lib_select = param.Selector(objects=libraries, default=libraries[1])
     fine_threshold = param.Selector(objects=[0.2], default=0.2)
     coarse_threshold = param.Number(0.4)
-    dataset_select = param.FileSelector(path=os.path.join("compound_subsets", "*.{csv,parquet}"))
+    dataset_select = param.FileSelector(path=os.path.join("compound_subsets", "*"))
     compound_input = param.String()
     selected_compound = param.String()
     selected_nodes = param.List()  # Track the selected node
