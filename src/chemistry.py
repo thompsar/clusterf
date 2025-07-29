@@ -226,6 +226,64 @@ class ChemLibrary:
                 super_clust_id
             )
 
+    def extract_sub_categories(self):
+        """
+        Extract sub-categories from the dataset_df into individual columns with symbols.
+        This processes the 'Sub Categories' column if it exists.
+        """
+        if not hasattr(self, 'dataset_df') or 'Sub Categories' not in self.dataset_df.columns:
+            return {}
+        
+        # Get unique compounds and their sub-categories (convert to string for hashing)
+        temp_df = self.dataset_df[['Compound', 'Sub Categories']].copy()
+        temp_df['Sub Categories'] = temp_df['Sub Categories'].astype(str)
+        unique_compounds = temp_df.drop_duplicates()
+        
+        # Parse sub-categories and get all unique keys
+        all_keys = set()
+        parsed_subcats = {}
+        
+        for _, row in unique_compounds.iterrows():
+            compound = row['Compound']
+            subcats_raw = row['Sub Categories']
+            
+            if pd.isna(subcats_raw) or subcats_raw == 'nan':
+                parsed_subcats[compound] = {}
+                continue
+                
+            try:
+                # Parse the string representation of the dictionary
+                subcats_dict = eval(str(subcats_raw))
+                if isinstance(subcats_dict, dict):
+                    parsed_subcats[compound] = subcats_dict
+                    all_keys.update(subcats_dict.keys())
+                else:
+                    parsed_subcats[compound] = {}
+            except:
+                parsed_subcats[compound] = {}
+        
+        # Convert values to symbols
+        def value_to_symbol(value):
+            if value == '+':
+                return '↑'
+            elif value == '-':
+                return '↓'
+            elif value == 'Interfering':
+                return '!'
+            else:
+                return '—'  # em dash for None or other values
+        
+        # Create columns for each sub-category key
+        subcategory_columns = {}
+        for key in sorted(all_keys):
+            column_data = {}
+            for compound in self.df['Compound']:
+                compound_subcats = parsed_subcats.get(compound, {})
+                column_data[compound] = value_to_symbol(compound_subcats.get(key))
+            subcategory_columns[key] = column_data
+        
+        return subcategory_columns
+
     def update_dataset_with_clustering(self, fine_thresh, coarse_thresh):
         """
         Update dataset_df with clustering information and current Retest values.
@@ -234,12 +292,10 @@ class ChemLibrary:
         if not hasattr(self, 'dataset_df'):
             return
         # Get clustering and category information from the main library df
-        cluster_info = self.df[['Compound', str(fine_thresh), 'SuperCluster', 'Retest']].copy()
+        cluster_info = self.df[['Compound', str(fine_thresh), 'Retest']].copy()
         
         # Remove existing clustering columns from dataset_df if they exist
         columns_to_drop = []
-        if 'SuperCluster' in self.dataset_df.columns:
-            columns_to_drop.append('SuperCluster')
         if str(fine_thresh) in self.dataset_df.columns:
             columns_to_drop.append(str(fine_thresh))
         if str(coarse_thresh) in self.dataset_df.columns:
