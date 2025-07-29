@@ -106,7 +106,7 @@ class ClusterF(param.Parameterized):
     lib_select = param.Selector(objects=libraries, default=libraries[1])
     fine_threshold = param.Selector(objects=[0.2], default=0.2)
     coarse_threshold = param.Number(0.4)
-    dataset_select = param.FileSelector(path=os.path.join("compound_subsets", "*.csv*"))
+    dataset_select = param.FileSelector(path=os.path.join("compound_subsets", "*.{csv,parquet}"))
     compound_input = param.String()
     selected_compound = param.String()
     selected_nodes = param.List()  # Track the selected node
@@ -637,10 +637,19 @@ class ClusterF(param.Parameterized):
             if hasattr(self.library, 'super_clusters'):
                 self.library.update_dataset_with_clustering(self.fine_threshold, self.coarse_threshold)
             
-            # Save the dataset_df back to the original file
-            self.library.dataset_df.to_csv(self.dataset_select, index=False)
+            # Determine the output format based on file extension
+            if self.dataset_select.lower().endswith('.csv'):
+                # Save as CSV (backwards compatibility)
+                self.library.dataset_df.to_csv(self.dataset_select, index=False)
+                print(f"Dataset saved as CSV: {self.dataset_select}")
+            else:
+                # Save as Parquet (preferred format)
+                parquet_path = self.dataset_select.replace('.csv', '.parquet') if self.dataset_select.endswith('.csv') else self.dataset_select
+                if not parquet_path.endswith('.parquet'):
+                    parquet_path += '.parquet'
+                self.library.dataset_df.to_parquet(parquet_path, index=False)
+                print(f"Dataset saved as Parquet: {parquet_path}")
 
-            
         except Exception as e:
             print(f"Error saving dataset: {e}")
 

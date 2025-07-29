@@ -45,8 +45,12 @@ class ChemLibrary:
         Loads dataset containing potentially multiple copies of compounds across different constructs.
         Creates both dataset_df (full dataset) and subset_df (unique compounds with categories).
         Expects dataset to have Category column pre-populated, including "Miss".
+        Supports both CSV and Parquet file formats.
         """
-        self.dataset_df = pd.read_csv(path, dtype={"Sub Categories": str})
+        if path.lower().endswith('.parquet'):
+            self.dataset_df = pd.read_parquet(path)
+        else:
+            self.dataset_df = pd.read_csv(path, dtype={"Sub Categories": str})
         #drop super cluster column if it exists
         # since dataset will have na for some values and dont want to deal with those for now.
         if "SuperCluster" in self.dataset_df.columns:
