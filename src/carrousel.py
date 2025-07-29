@@ -8,7 +8,7 @@ class Carrousel(param.Parameterized):
     # List of SVGs to display
     svgs = param.List([])
     current_index = param.Integer(0)
-    svg_viewer = pn.pane.SVG(object=None, sizing_mode="stretch_both", max_height=600, margin=0)
+    svg_viewer = pn.pane.SVG(object=None, sizing_mode="stretch_both", margin=0)
     prev_button = param.Action(
         default=lambda x: x.param.trigger("prev_button"), label="◀️"
     )
@@ -35,7 +35,7 @@ class Carrousel(param.Parameterized):
             align="center",
             sizing_mode="fixed",
             width=150,
-            height=200,
+            height=100,
             margin=0,
         )
         self.update_carrousel()
@@ -84,7 +84,7 @@ class Carrousel(param.Parameterized):
             pn.Row(self.svg_viewer, sizing_mode="stretch_both"),
             self.buttons,
             sizing_mode="stretch_both",
-            max_height=800,
+            # max_height=800,
             margin=0,
         )
 
