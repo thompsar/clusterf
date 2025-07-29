@@ -163,8 +163,8 @@ class ClusterF(param.Parameterized):
         
         self.color_widgets = {}
         self.color_collapse = None
+        self.subcategory_columns = {}  # Initialize subcategory columns storage
         self.visible_columns = ["Compound", str(self.fine_threshold)]
-        # SuperCluster will be added to visible columns after it's created
         self.compound_table = pn.widgets.Tabulator(
             self.library.df[self.visible_columns],
             sizing_mode="stretch_both",
@@ -248,9 +248,8 @@ class ClusterF(param.Parameterized):
     @param.depends("fine_threshold", watch=True)
     def update_fine_threshold(self):
         self.visible_columns = ["Compound", "SMILES", str(self.fine_threshold)]
-        # Remove SuperCluster from visible columns since it will be recreated
-        if "SuperCluster" in self.visible_columns:
-            self.visible_columns.remove("SuperCluster")
+        # Reset subcategory columns when fine threshold changes
+        self.subcategory_columns = {}
         self.compound_table.visible = False
         self.param.trigger("toggle_miss_button")  # Refresh button panel visibility
         self.compound_image.object = None
@@ -359,6 +358,10 @@ class ClusterF(param.Parameterized):
         # Update fine threshold options based on new library
         self.update_fine_threshold_options()
         
+        # Reset subcategory columns when library changes
+        self.subcategory_columns = {}
+        self.visible_columns = ["Compound", str(self.fine_threshold)]
+        
         self.compound_table.value = self.library.df[self.visible_columns]
         self.compound_input = ""
         self.selected_compound = ""
@@ -375,7 +378,13 @@ class ClusterF(param.Parameterized):
 
         # Load the dataset
         self.library.load_dataset(self.dataset_select)
-        self.visible_columns = self.visible_columns + ["Category", "Retest"]
+        
+        # Extract sub-categories into individual columns
+        self.subcategory_columns = self.library.extract_sub_categories()
+        
+        # Add Category, Retest, and subcategory columns to visible columns
+        new_columns = list(self.subcategory_columns.keys()) + ["Category", "Retest"]
+        self.visible_columns = self.visible_columns + new_columns
 
         # Create color pickers for categories found in the subset
         if (
@@ -445,10 +454,6 @@ class ClusterF(param.Parameterized):
         self.initialize_graph_plot(self.library.sub_graph)
         self.graph_view()
 
-        # Add SuperCluster to visible columns if not already there
-        if "SuperCluster" not in self.visible_columns:
-            self.visible_columns.insert(-2, "SuperCluster")
-        # self.visible_columns = self.visible_columns + ["Category", "Retest"]
         new_table = self.build_table(1)  # First super cluster
         self.compound_table.value = new_table
         self.style_compound_table()
@@ -507,11 +512,17 @@ class ClusterF(param.Parameterized):
         Returns:
             pd.DataFrame: Filtered dataframe with compounds from specified clusters
         """
-        table_df = self.library.df
+        table_df = self.library.df.copy()
+
+        # Add subcategory columns if they exist
+        if hasattr(self, 'subcategory_columns') and self.subcategory_columns:
+            for col_name, col_data in self.subcategory_columns.items():
+                # Map compound values to the column
+                table_df[col_name] = table_df['Compound'].map(col_data)
 
         # Check if input is a single integer (super cluster number)
         if isinstance(clusters_or_super_cluster, (int, float)):
-            # Filter by super cluster number using the SuperCluster column
+            # Filter by super cluster number using the SuperCluster column (if available)
             if "SuperCluster" in table_df.columns:
                 table_df = table_df[
                     table_df["SuperCluster"] == clusters_or_super_cluster
@@ -542,7 +553,9 @@ class ClusterF(param.Parameterized):
         if not self.show_miss_compounds:
             table_df = table_df[table_df["Category"] != "Miss"]
 
-        table_df = table_df[self.visible_columns].reset_index()
+        # Ensure all visible columns exist in table_df
+        available_columns = [col for col in self.visible_columns if col in table_df.columns]
+        table_df = table_df[available_columns].reset_index()
 
         return table_df
 
