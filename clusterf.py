@@ -1163,7 +1163,7 @@ class ClusterF(param.Parameterized):
         # Determine grid parameters based on number of compounds
         if len(compounds) > 1:
             mols_per_row = 4
-            max_rows = 4
+            max_rows = 3
             orient = True
         else:
             mols_per_row = 4
