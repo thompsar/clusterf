@@ -65,7 +65,7 @@ NEW:
     - [x] Remove rendering of single compounds in the control panel, instead render the selected compounds in the compound grid?
     - [ ] Plot scatter and error bars for selected compounds in the compound data chart
 -[ ] Table gets broken after changing fine threshold and reclusrtering. Fix this.
--[ ] Initial display of compound grid is broken, flashes between showing and hiding misses.
+-[x] Initial display of compound grid is broken, flashes between showing and hiding misses.
 
 """
 
@@ -129,7 +129,7 @@ class ClusterF(param.Parameterized):
     )
     show_miss_compounds = param.Boolean(default=True)
     toggle_miss_button = param.Action(
-        lambda x: x.param.trigger("toggle_miss_button"), label="Hide Miss Compounds"
+        lambda x: x.param.trigger("toggle_miss_button"), label="Hide Misses"
     )
     retest_selected_button = param.Action(
         lambda x: x.param.trigger("retest_selected_button"), label="Retest Selected"
@@ -138,6 +138,7 @@ class ClusterF(param.Parameterized):
     # Dynamic color parameters will be added programmatically
     categories = param.List(default=[])
     color_widgets_visible = param.Boolean(default=False)
+    table_visible = param.Boolean(default=False)
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -253,7 +254,7 @@ class ClusterF(param.Parameterized):
         # Reset subcategory columns when fine threshold changes
         self.subcategory_columns = {}
         self.compound_table.visible = False
-        self.param.trigger("toggle_miss_button")  # Refresh button panel visibility
+        self.table_visible = False
         self.compound_image.object = None
         self.compound_grid.svgs = []
         self.cluster_graph.object = None
@@ -368,7 +369,7 @@ class ClusterF(param.Parameterized):
         self.compound_input = ""
         self.selected_compound = ""
         self.compound_table.visible = False
-        self.param.trigger("toggle_miss_button")  # Refresh button panel visibility
+        self.table_visible = False
         self.compound_image.object = None
 
     @param.depends("dataset_select", watch=True)
@@ -401,7 +402,7 @@ class ClusterF(param.Parameterized):
 
         # Clear any existing clustering results from UI
         self.compound_table.visible = False
-        self.param.trigger("toggle_miss_button")  # Refresh button panel visibility
+        self.table_visible = False
         self.compound_image.object = None
         self.compound_grid.svgs = []
         self.cluster_graph.object = None
@@ -460,7 +461,7 @@ class ClusterF(param.Parameterized):
         self.compound_table.value = new_table
         self.style_compound_table()
         self.compound_table.visible = True
-        self.param.trigger("toggle_miss_button")  # Refresh button panel visibility
+        self.table_visible = True
 
         compounds = new_table["Compound"].values
         self.update_compound_grid(compounds)
@@ -1362,10 +1363,10 @@ class ClusterF(param.Parameterized):
 
         return plot
 
-    @param.depends("toggle_miss_button")
+    @param.depends("table_visible")
     def get_table_controls_panel(self):
         """Create a panel with table control buttons, only visible when table is visible."""
-        if not self.compound_table.visible:
+        if not self.table_visible:
             return pn.Spacer(width=0, height=0)
 
         return pn.Column(
