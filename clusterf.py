@@ -64,6 +64,8 @@ NEW:
     - [x] Update the compound data chart to display data for selected compounds
     - [x] Remove rendering of single compounds in the control panel, instead render the selected compounds in the compound grid?
     - [ ] Plot scatter and error bars for selected compounds in the compound data chart
+-[ ] Table gets broken after changing fine threshold and reclusrtering. Fix this.
+-[ ] Initial display of compound grid is broken, flashes between showing and hiding misses.
 
 """
 
