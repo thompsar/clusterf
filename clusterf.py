@@ -64,7 +64,7 @@ NEW:
     - [x] Update the compound data chart to display data for selected compounds
     - [x] Remove rendering of single compounds in the control panel, instead render the selected compounds in the compound grid?
     - [ ] Plot scatter and error bars for selected compounds in the compound data chart
--[ ] Table gets broken after changing fine threshold and reclusrtering. Fix this.
+-[x] Table gets broken after changing fine threshold and reclusrtering. Fix this.
 -[x] Initial display of compound grid is broken, flashes between showing and hiding misses.
 
 """
@@ -250,9 +250,18 @@ class ClusterF(param.Parameterized):
 
     @param.depends("fine_threshold", watch=True)
     def update_fine_threshold(self):
-        self.visible_columns = ["Compound", "SMILES", str(self.fine_threshold)]
-        # Reset subcategory columns when fine threshold changes
-        self.subcategory_columns = {}
+        # Update the fine threshold column but preserve other column structure
+        base_columns = ["Compound", str(self.fine_threshold)]
+        
+        # If we have subcategory columns and dataset loaded, preserve them
+        if hasattr(self, 'subcategory_columns') and self.subcategory_columns and hasattr(self.library, 'subset_df'):
+            additional_columns = list(self.subcategory_columns.keys()) + ["Category", "Retest"]
+            self.visible_columns = base_columns + additional_columns
+        else:
+            # No dataset loaded yet, just use basic columns
+            self.visible_columns = base_columns
+            self.subcategory_columns = {}
+        
         self.compound_table.visible = False
         self.table_visible = False
         self.compound_image.object = None
@@ -361,9 +370,17 @@ class ClusterF(param.Parameterized):
         # Update fine threshold options based on new library
         self.update_fine_threshold_options()
         
-        # Reset subcategory columns when library changes
-        self.subcategory_columns = {}
-        self.visible_columns = ["Compound", str(self.fine_threshold)]
+        # Reset to basic columns when library changes, but preserve structure if dataset exists
+        basic_columns = ["Compound", str(self.fine_threshold)]
+        if hasattr(self, 'dataset_select') and self.dataset_select and hasattr(self, 'subcategory_columns'):
+            # If we have a dataset loaded, we'll need to reload it to rebuild column structure
+            # For now, just reset to basic columns and let load_dataset_df rebuild properly
+            self.subcategory_columns = {}
+            self.visible_columns = basic_columns
+        else:
+            # No dataset, just use basic columns
+            self.subcategory_columns = {}
+            self.visible_columns = basic_columns
         
         self.compound_table.value = self.library.df[self.visible_columns]
         self.compound_input = ""
@@ -418,6 +435,11 @@ class ClusterF(param.Parameterized):
             # probably should fix this...someday...
             self.load_dataset_df()
             
+        # Ensure visible_columns are properly set up with subcategory columns
+        if hasattr(self, 'subcategory_columns') and self.subcategory_columns:
+            base_columns = ["Compound", str(self.fine_threshold)]
+            additional_columns = list(self.subcategory_columns.keys()) + ["Category", "Retest"]
+            self.visible_columns = base_columns + additional_columns
 
         self.slider_widget.disabled = True
         # ensure coarse threshold is greater than fine threshold
