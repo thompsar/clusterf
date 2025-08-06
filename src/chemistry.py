@@ -13,7 +13,7 @@ from rdkit.Chem import rdFMCS
 # will throw  AttributeError: 'str' object has no attribute 'data'
 # when img.data is called.
 # Its not sufficient to change img.data to img.
-from rdkit.Chem.Draw import IPythonConsole
+from rdkit.Chem.Draw import IPythonConsole # noqa: F401
 
 
 class ChemLibrary:
@@ -280,7 +280,7 @@ class ChemLibrary:
                     all_keys.update(subcats_dict.keys())
                 else:
                     parsed_subcats[compound] = {}
-            except:
+            except (SyntaxError, NameError, TypeError, ValueError):
                 parsed_subcats[compound] = {}
 
         # Convert values to symbols
