@@ -123,7 +123,9 @@ class ChemLibrary:
         for column in np.arange(0.05, 0.8, 0.05):
             col = str(np.round(column, 2))
             if col in df.columns:
-                df[col] = df[col].astype(int)
+                # Handle NaN values before converting to int
+                df[col] = df[col].fillna(-1).astype(int)
+                df[col] = df[col].replace(-1, np.nan)
         return df
 
     def cluster_subset(self, coarse_thresh, radius=2, fpSize=2048):
