@@ -47,11 +47,11 @@ class ChemLibrary:
         Expects dataset to have Category column pre-populated, including "Miss".
         Supports both CSV and Parquet file formats.
         """
-        if path.lower().endswith('.parquet'):
+        if path.lower().endswith(".parquet"):
             self.dataset_df = pd.read_parquet(path)
         else:
             self.dataset_df = pd.read_csv(path, dtype={"Sub Categories": str})
-        #drop super cluster column if it exists
+        # drop super cluster column if it exists
         # since dataset will have na for some values and dont want to deal with those for now.
         if "SuperCluster" in self.dataset_df.columns:
             self.dataset_df = self.dataset_df.drop(columns=["SuperCluster"])
@@ -59,7 +59,7 @@ class ChemLibrary:
         self.dataset_df = self.standardize_df(self.dataset_df)
         if "Retest" not in self.dataset_df.columns:
             self.dataset_df["Retest"] = False
-        
+
         # Create subset_df with unique compounds and their categories
         self.create_subset_df()
 
@@ -70,15 +70,15 @@ class ChemLibrary:
             how="left",
         )
         self.df["Category"] = self.df["Category"].fillna("Miss")
-        #Note below, converting to 'boolean' and not 'bool' was necessary to 
-        # avoid FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and 
-        # will change in a future version. Call result.infer_objects(copy=False) instead. 
+        # Note below, converting to 'boolean' and not 'bool' was necessary to
+        # avoid FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and
+        # will change in a future version. Call result.infer_objects(copy=False) instead.
         # To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
         # except below line also throws FutureWarning:
         # self.df["Retest"] = self.df["Retest"].fillna(False).astype(bool).infer_objects(copy=False)
         self.df["Retest"] = self.df["Retest"].fillna(False)
-        self.df["Retest"] = self.df["Retest"].astype('boolean').fillna(False)
-        
+        self.df["Retest"] = self.df["Retest"].astype("boolean").fillna(False)
+
         # save for later debugging
         # print('retest column value counts:')
         # print(self.df['Retest'].value_counts())
@@ -107,7 +107,9 @@ class ChemLibrary:
             .drop_duplicates(subset="Compound")
             .reset_index(drop=True)
         )
-        self.subset_df["Retest"] = self.subset_df["Retest"].astype('boolean').fillna(False)
+        self.subset_df["Retest"] = (
+            self.subset_df["Retest"].astype("boolean").fillna(False)
+        )
 
         self.subset_df = self.standardize_df(self.subset_df)
 
@@ -124,7 +126,7 @@ class ChemLibrary:
                 df[col] = df[col].astype(int)
         return df
 
-    def cluster_subset(self, coarse_thresh):
+    def cluster_subset(self, coarse_thresh, radius=2, fpSize=2048):
         # check to see if subset_df already has SMILES strings
         if "SMILES" not in self.subset_df.columns:
             subset_smiles = self.df[
@@ -136,11 +138,19 @@ class ChemLibrary:
         # see https://greglandrum.github.io/rdkit-blog/posts/2023-01-18-fingerprint-generator-tutorial.html
         # for more info on finger printing
         fpgen = AllChem.GetRDKitFPGenerator()
+        # use morgan fingerprints instead? Corresponds to ECFP4
+        # fpgen = AllChem.GetMorganGenerator(radius=2,fpSize=2048)
+        #ECFP6 is radius=3
+        #fpgen = AllChem.GetMorganGenerator(radius=radius,fpSize=fpSize)
+        # fpgen = AllChem.GetMorganGenerator(radius=2,fpSize=2048,atomInvariantsGenerator=AllChem.GetMorganFeatureAtomInvGen())
+
+        # fpgen = AllChem.GetTopologicalTorsionGenerator()
         # see also https://www.researchgate.net/post/Two_similar_compounds_with_a_low_smaller_than_085_Tanimoto_coefficient2
         # for more info on how fingerprinting might not capture two near identical looking molecules.
         # different type of fingerprint can be used. see singleton clusters 3950,6353 from CNS
-        fps = [fpgen.GetFingerprint(x) for x in mols]
-
+        fps = [fpgen.GetFingerprint(mol) for mol in mols]
+        
+    
         clusters = ClusterFps(fps, coarse_thresh)
 
         for idx, cluster in enumerate(clusters, start=1):
@@ -189,6 +199,8 @@ class ChemLibrary:
         self.singletons = np.where(edge_array.sum(axis=1) == 1)[0]
         # set diagonal to 0
         np.fill_diagonal(edge_array, 0)
+        # add back singleton nodes to edge_array
+        edge_array[self.singletons, self.singletons] = 1
         self.graph = nx.from_numpy_array(edge_array)
         # drop 0 node from graph
         self.graph.remove_node(0)
@@ -200,6 +212,9 @@ class ChemLibrary:
             for subgraph in nx.connected_components(self.graph)
             if len(subgraph) > 1
         ]
+
+        # add singletons to super_cluster_groups
+        super_cluster_groups.extend([[node] for node in self.singletons])
 
         super_cluster_counts = []
         for subgraph in super_cluster_groups:
@@ -225,32 +240,38 @@ class ChemLibrary:
             self.df.loc[self.df[fine_thresh].isin(sub_clusters), "SuperCluster"] = (
                 super_clust_id
             )
+        print(
+            f"Total compounds in super clusters: {np.sum([comp for _, comp, __ in self.super_clusters])}"
+        )
 
     def extract_sub_categories(self):
         """
         Extract sub-categories from the dataset_df into individual columns with symbols.
         This processes the 'Sub Categories' column if it exists.
         """
-        if not hasattr(self, 'dataset_df') or 'Sub Categories' not in self.dataset_df.columns:
+        if (
+            not hasattr(self, "dataset_df")
+            or "Sub Categories" not in self.dataset_df.columns
+        ):
             return {}
-        
+
         # Get unique compounds and their sub-categories (convert to string for hashing)
-        temp_df = self.dataset_df[['Compound', 'Sub Categories']].copy()
-        temp_df['Sub Categories'] = temp_df['Sub Categories'].astype(str)
+        temp_df = self.dataset_df[["Compound", "Sub Categories"]].copy()
+        temp_df["Sub Categories"] = temp_df["Sub Categories"].astype(str)
         unique_compounds = temp_df.drop_duplicates()
-        
+
         # Parse sub-categories and get all unique keys
         all_keys = set()
         parsed_subcats = {}
-        
+
         for _, row in unique_compounds.iterrows():
-            compound = row['Compound']
-            subcats_raw = row['Sub Categories']
-            
-            if pd.isna(subcats_raw) or subcats_raw == 'nan':
+            compound = row["Compound"]
+            subcats_raw = row["Sub Categories"]
+
+            if pd.isna(subcats_raw) or subcats_raw == "nan":
                 parsed_subcats[compound] = {}
                 continue
-                
+
             try:
                 # Parse the string representation of the dictionary
                 subcats_dict = eval(str(subcats_raw))
@@ -261,27 +282,27 @@ class ChemLibrary:
                     parsed_subcats[compound] = {}
             except:
                 parsed_subcats[compound] = {}
-        
+
         # Convert values to symbols
         def value_to_symbol(value):
-            if value == '+':
-                return '↑'
-            elif value == '-':
-                return '↓'
-            elif value == 'Interfering':
-                return '!'
+            if value == "+":
+                return "↑"
+            elif value == "-":
+                return "↓"
+            elif value == "Interfering":
+                return "!"
             else:
-                return '—'  # em dash for None or other values
-        
+                return "—"  # em dash for None or other values
+
         # Create columns for each sub-category key
         subcategory_columns = {}
         for key in sorted(all_keys):
             column_data = {}
-            for compound in self.df['Compound']:
+            for compound in self.df["Compound"]:
                 compound_subcats = parsed_subcats.get(compound, {})
                 column_data[compound] = value_to_symbol(compound_subcats.get(key))
             subcategory_columns[key] = column_data
-        
+
         return subcategory_columns
 
     def update_dataset_with_clustering(self, fine_thresh, coarse_thresh):
@@ -289,31 +310,30 @@ class ChemLibrary:
         Update dataset_df with clustering information and current Retest values.
         This should be called after clustering is complete.
         """
-        if not hasattr(self, 'dataset_df'):
+        if not hasattr(self, "dataset_df"):
             return
         # Get clustering and category information from the main library df
-        cluster_info = self.df[['Compound', str(fine_thresh), 'Retest']].copy()
-        
+        cluster_info = self.df[["Compound", str(fine_thresh), "Retest"]].copy()
+
         # Remove existing clustering columns from dataset_df if they exist
         columns_to_drop = []
         if str(fine_thresh) in self.dataset_df.columns:
             columns_to_drop.append(str(fine_thresh))
         if str(coarse_thresh) in self.dataset_df.columns:
             columns_to_drop.append(str(coarse_thresh))
-        if 'Retest' in self.dataset_df.columns:
-            columns_to_drop.append('Retest')
-        
+        if "Retest" in self.dataset_df.columns:
+            columns_to_drop.append("Retest")
+
         if columns_to_drop:
             self.dataset_df = self.dataset_df.drop(columns=columns_to_drop)
-        
+
         # Merge clustering information into dataset_df
         self.dataset_df = self.dataset_df.merge(
             cluster_info,
-            on='Compound',
-            how='left',
+            on="Compound",
+            how="left",
         )
-        
-        
+
         # # Add coarse clustering information from subset_df if it exists
         # if hasattr(self, 'subset_df') and str(coarse_thresh) in self.subset_df.columns:
         #     coarse_info = self.subset_df[['Compound', str(coarse_thresh)]].copy()
@@ -321,7 +341,7 @@ class ChemLibrary:
         #         coarse_info,
         #         on='Compound',
         #         how='left'
-            # )
+        # )
 
     def build_subgraph(self, member_cluster):
         """
