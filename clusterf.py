@@ -179,6 +179,11 @@ class ClusterF(param.Parameterized):
             margin=0,
             styles={"padding": "0px"},
         )
+        self.compound_table.editable = True
+
+        # Enable in-cell toggling for Retest and show symbols instead of True/False
+        self.compound_table.editors = {"Retest": {"type": "tickCross"}}
+        self.compound_table.formatters = {"Retest": {"type": "tickCross"}}
 
         # Slider widget takes advantage of param for real time updating, but uses param.watch
         # with throttling to update only when slider stops for more complicated operations
@@ -189,6 +194,10 @@ class ClusterF(param.Parameterized):
         self.slider_widget.param.watch(self.update_throttled, "value_throttled")
         self.compound_table.on_click(self.on_table_click)
         self.compound_table.param.watch(self.on_table_selection, "selection")
+        # Cache the previous table dataframe to detect cell edits
+        self._table_cache = None
+        # Watch for any edits in the table value
+        self.compound_table.param.watch(self.on_table_edited, "value")
 
         # Network of sub-clusters in super cluster
         self.cluster_graph = pn.pane.HoloViews(
@@ -694,6 +703,78 @@ class ClusterF(param.Parameterized):
             print(f"Error saving dataset: {e}")
 
     def on_table_click(self, event):
+        # Determine column name from event
+        try:
+            col = event.column
+            if isinstance(col, int):
+                if 0 <= col < len(self.compound_table.value.columns):
+                    col_name = self.compound_table.value.columns[col]
+                else:
+                    col_name = None
+            else:
+                col_name = col
+        except Exception:
+            col_name = None
+
+        # If clicking the Retest cell, toggle its value in-place and propagate
+        if col_name == "Retest":
+            try:
+                row = event.row
+                df = self.compound_table.value
+                if row is None or "Retest" not in df.columns or "Compound" not in df.columns:
+                    return
+
+                compound = df.at[row, "Compound"]
+                curr_val = bool(df.at[row, "Retest"]) if pd.notna(df.at[row, "Retest"]) else False
+                new_val = not curr_val
+
+                # Update the visible table cell immediately
+                df.at[row, "Retest"] = new_val
+                self.compound_table.value = df  # trigger update
+
+                # Propagate change to backing DataFrames
+                if hasattr(self.library, "df") and isinstance(self.library.df, pd.DataFrame):
+                    mask = self.library.df["Compound"] == compound
+                    if mask.any():
+                        self.library.df.loc[mask, "Retest"] = new_val
+
+                if hasattr(self.library, "dataset_df") and isinstance(self.library.dataset_df, pd.DataFrame):
+                    dmask = self.library.dataset_df["Compound"] == compound
+                    if dmask.any():
+                        self.library.dataset_df.loc[dmask, "Retest"] = new_val
+
+                if hasattr(self.library, "subset_df") and isinstance(self.library.subset_df, pd.DataFrame):
+                    smask = self.library.subset_df["Compound"] == compound
+                    if smask.any():
+                        self.library.subset_df.loc[smask, "Retest"] = new_val
+
+                # Keep dtypes consistent
+                try:
+                    self.library.df["Retest"] = self.library.df["Retest"].astype("boolean")
+                    if hasattr(self.library, "dataset_df") and isinstance(self.library.dataset_df, pd.DataFrame):
+                        self.library.dataset_df["Retest"] = self.library.dataset_df["Retest"].astype("boolean")
+                    if hasattr(self.library, "subset_df") and isinstance(self.library.subset_df, pd.DataFrame):
+                        self.library.subset_df["Retest"] = self.library.subset_df["Retest"].astype("boolean")
+                except Exception:
+                    pass
+
+                # Persist clustering columns/Rerun merge so file saves stay in sync
+                if hasattr(self.library, "super_clusters"):
+                    try:
+                        self.library.update_dataset_with_clustering(self.fine_threshold, self.coarse_threshold)
+                    except Exception:
+                        pass
+
+                # Re-apply table styling so Retest changes reflect any color rules
+                try:
+                    self.style_compound_table()
+                except Exception:
+                    pass
+
+            finally:
+                return  # don't treat this click as a row selection
+
+        # Otherwise: normal behavior — select the row and update panes
         compound = self.compound_table.value.loc[event.row, "Compound"]
         image = self.library.draw_compound(
             compound,
@@ -702,8 +783,7 @@ class ClusterF(param.Parameterized):
         )
         self.selected_compound = f"### Compound ID: {compound}"
         self.compound_image.object = image
-        # add the row to the selection
-        self.compound_table.selection = [event.row]  # Highlight the clicked row
+        self.compound_table.selection = [event.row]
 
     def on_table_selection(self, event):
         """Handle multiple row selection in the compound table."""
@@ -741,6 +821,90 @@ class ClusterF(param.Parameterized):
             # Multiple selections - clear single compound display
             self.selected_compound = f"### {len(selected_compounds)} compounds selected"
             self.compound_image.object = None
+
+    def on_table_edited(self, event):
+        """When the Retest column is toggled in the table, propagate the change
+        back to library.df, dataset_df, and subset_df, and keep dtypes stable.
+        """
+        try:
+            import pandas as _pd  # local alias
+        except Exception:
+            _pd = pd
+
+        new_df = event.new
+        old_df = event.old if event.old is not None else getattr(self, "_table_cache", None)
+        # Always update cache for subsequent diffs
+        if hasattr(new_df, "copy"):
+            self._table_cache = new_df.copy()
+        else:
+            self._table_cache = new_df
+
+        # Validate frames/columns
+        if new_df is None or not isinstance(new_df, _pd.DataFrame):
+            return
+        if "Compound" not in new_df.columns or "Retest" not in new_df.columns:
+            return
+        if old_df is None or not isinstance(old_df, _pd.DataFrame):
+            # First render; nothing to compare yet
+            return
+
+        # Build a diff of Retest values keyed by Compound
+        try:
+            left = old_df[["Compound", "Retest"]].rename(columns={"Retest": "Retest_old"})
+            right = new_df[["Compound", "Retest"]].rename(columns={"Retest": "Retest_new"})
+            merged = left.merge(right, on="Compound", how="outer")
+        except Exception:
+            return
+
+        changed = merged[merged["Retest_old"] != merged["Retest_new"]]
+        if changed.empty:
+            return
+
+        # Apply changes to all backing DataFrames
+        for _, row in changed.iterrows():
+            comp = row["Compound"]
+            new_val = bool(row["Retest_new"]) if _pd.notna(row["Retest_new"]) else False
+
+            # Update main library df
+            if hasattr(self.library, "df") and isinstance(self.library.df, _pd.DataFrame):
+                mask = self.library.df["Compound"] == comp
+                if mask.any():
+                    self.library.df.loc[mask, "Retest"] = new_val
+
+            # Update dataset_df if present
+            if hasattr(self.library, "dataset_df") and isinstance(self.library.dataset_df, _pd.DataFrame):
+                dmask = self.library.dataset_df["Compound"] == comp
+                if dmask.any():
+                    self.library.dataset_df.loc[dmask, "Retest"] = new_val
+
+            # Update subset_df if present
+            if hasattr(self.library, "subset_df") and isinstance(self.library.subset_df, _pd.DataFrame):
+                smask = self.library.subset_df["Compound"] == comp
+                if smask.any():
+                    self.library.subset_df.loc[smask, "Retest"] = new_val
+
+        # Keep dtypes consistent ('boolean' avoids FutureWarning)
+        try:
+            self.library.df["Retest"] = self.library.df["Retest"].astype("boolean")
+            if hasattr(self.library, "dataset_df") and isinstance(self.library.dataset_df, _pd.DataFrame):
+                self.library.dataset_df["Retest"] = self.library.dataset_df["Retest"].astype("boolean")
+            if hasattr(self.library, "subset_df") and isinstance(self.library.subset_df, _pd.DataFrame):
+                self.library.subset_df["Retest"] = self.library.subset_df["Retest"].astype("boolean")
+        except Exception:
+            pass
+
+        # Persist clustering columns/Rerun merge so file saves stay in sync
+        if hasattr(self.library, "super_clusters"):
+            try:
+                self.library.update_dataset_with_clustering(self.fine_threshold, self.coarse_threshold)
+            except Exception:
+                pass
+
+        # Re-apply table styling so Retest changes reflect any color rules
+        try:
+            self.style_compound_table()
+        except Exception:
+            pass
 
     def initialize_graph_plot(self, G):
         self.G = G
