@@ -70,30 +70,13 @@ NEW:
 """
 
 
-# def category_sort_key(category):
-#     category_str = str(category).lower()
-#     if (
-#         "hit" in category_str
-#         and "(nr)" not in category_str
-#         and "questionable" not in category_str
-#     ):
-#         return (0, category)  # Highest priority
-#     elif "(nr)" in category_str or "questionable" in category_str:
-#         return (1, category)  # Second priority
-#     elif "interfering" in category_str:
-#         return (2, category)  # Third priority
-#     else:
-#         return (3, category)  # Lowest priority (includes "Miss" and others)
-
 def category_sort_key(category):
     category_str = str(category).lower()
-    if (
-        "selective" in category_str
-    ):
+    if "selective" in category_str:
         return (0, category)  # Highest priority
     elif "universal" in category_str:
         return (1, category)  # Second priority
-    elif 'increaser' in category_str or 'decreaser' in category_str:
+    elif "increaser" in category_str or "decreaser" in category_str:
         return (2, category)
     elif "bidirectional" in category_str:
         return (3, category)  # Third priority
@@ -160,10 +143,10 @@ class ClusterF(param.Parameterized):
         ]
 
         self.library = ChemLibrary(self.lib_select)
-        
+
         # Update fine threshold options based on loaded library
         self.update_fine_threshold_options()
-        
+
         self.color_widgets = {}
         self.color_collapse = None
         self.subcategory_columns = {}  # Initialize subcategory columns storage
@@ -266,16 +249,23 @@ class ClusterF(param.Parameterized):
     def update_fine_threshold(self):
         # Update the fine threshold column but preserve other column structure
         base_columns = ["Compound", str(self.fine_threshold)]
-        
+
         # If we have subcategory columns and dataset loaded, preserve them
-        if hasattr(self, 'subcategory_columns') and self.subcategory_columns and hasattr(self.library, 'subset_df'):
-            additional_columns = list(self.subcategory_columns.keys()) + ["Category", "Retest"]
+        if (
+            hasattr(self, "subcategory_columns")
+            and self.subcategory_columns
+            and hasattr(self.library, "subset_df")
+        ):
+            additional_columns = list(self.subcategory_columns.keys()) + [
+                "Category",
+                "Retest",
+            ]
             self.visible_columns = base_columns + additional_columns
         else:
             # No dataset loaded yet, just use basic columns
             self.visible_columns = base_columns
             self.subcategory_columns = {}
-        
+
         self.compound_table.visible = False
         self.table_visible = False
         self.compound_image.object = None
@@ -359,8 +349,12 @@ class ClusterF(param.Parameterized):
         ]
 
         # Also update dataset_df with current clustering and Retest information
-        if hasattr(self.library, 'dataset_df') and hasattr(self.library, 'super_clusters'):
-            self.library.update_dataset_with_clustering(self.fine_threshold, self.coarse_threshold)
+        if hasattr(self.library, "dataset_df") and hasattr(
+            self.library, "super_clusters"
+        ):
+            self.library.update_dataset_with_clustering(
+                self.fine_threshold, self.coarse_threshold
+            )
 
         # Refresh the table to show updated values
         if self.selected_nodes:
@@ -380,13 +374,17 @@ class ClusterF(param.Parameterized):
     def update_compound_df(self):
         # BUG: Changing library results in key error due to missing columns in self.visible_columns
         self.library = ChemLibrary(self.lib_select)
-        
+
         # Update fine threshold options based on new library
         self.update_fine_threshold_options()
-        
+
         # Reset to basic columns when library changes, but preserve structure if dataset exists
         basic_columns = ["Compound", str(self.fine_threshold)]
-        if hasattr(self, 'dataset_select') and self.dataset_select and hasattr(self, 'subcategory_columns'):
+        if (
+            hasattr(self, "dataset_select")
+            and self.dataset_select
+            and hasattr(self, "subcategory_columns")
+        ):
             # If we have a dataset loaded, we'll need to reload it to rebuild column structure
             # For now, just reset to basic columns and let load_dataset_df rebuild properly
             self.subcategory_columns = {}
@@ -395,7 +393,7 @@ class ClusterF(param.Parameterized):
             # No dataset, just use basic columns
             self.subcategory_columns = {}
             self.visible_columns = basic_columns
-        
+
         self.compound_table.value = self.library.df[self.visible_columns]
         self.compound_input = ""
         self.selected_compound = ""
@@ -412,10 +410,10 @@ class ClusterF(param.Parameterized):
 
         # Load the dataset
         self.library.load_dataset(self.dataset_select)
-        
+
         # Extract sub-categories into individual columns
         self.subcategory_columns = self.library.extract_sub_categories()
-        
+
         # Add Category, Retest, and subcategory columns to visible columns
         new_columns = list(self.subcategory_columns.keys()) + ["Category", "Retest"]
         self.visible_columns = self.visible_columns + new_columns
@@ -448,11 +446,14 @@ class ClusterF(param.Parameterized):
             # dataset in the list is selected and wont trigger load_dataset_df
             # probably should fix this...someday...
             self.load_dataset_df()
-            
+
         # Ensure visible_columns are properly set up with subcategory columns
-        if hasattr(self, 'subcategory_columns') and self.subcategory_columns:
+        if hasattr(self, "subcategory_columns") and self.subcategory_columns:
             base_columns = ["Compound", str(self.fine_threshold)]
-            additional_columns = list(self.subcategory_columns.keys()) + ["Category", "Retest"]
+            additional_columns = list(self.subcategory_columns.keys()) + [
+                "Category",
+                "Retest",
+            ]
             self.visible_columns = base_columns + additional_columns
 
         self.slider_widget.disabled = True
@@ -469,7 +470,9 @@ class ClusterF(param.Parameterized):
         self.library.build_graph(self.fine_threshold, self.coarse_threshold)
 
         # Update dataset_df with clustering information and current Retest values
-        self.library.update_dataset_with_clustering(self.fine_threshold, self.coarse_threshold)
+        self.library.update_dataset_with_clustering(
+            self.fine_threshold, self.coarse_threshold
+        )
 
         # Compute saturation metrics and attach to subset_df
         try:
@@ -523,8 +526,13 @@ class ClusterF(param.Parameterized):
             sc_compounds = self.get_current_super_cluster_compounds()
             # SCS from subset_df (per compound) averaged to display stable value
             scs_val = np.nan
-            if hasattr(self.library, "subset_df") and "SCS" in self.library.subset_df.columns:
-                sc_vals = self.library.subset_df[self.library.subset_df["Compound"].isin(sc_compounds)]["SCS"]
+            if (
+                hasattr(self.library, "subset_df")
+                and "SCS" in self.library.subset_df.columns
+            ):
+                sc_vals = self.library.subset_df[
+                    self.library.subset_df["Compound"].isin(sc_compounds)
+                ]["SCS"]
                 if not sc_vals.empty:
                     scs_val = float(np.nanmean(sc_vals.values))
 
@@ -536,7 +544,7 @@ class ClusterF(param.Parameterized):
         try:
             if val != val or val is None:  # NaN check
                 return "—"
-            return f"{100.0*float(val):.1f}%"
+            return f"{100.0 * float(val):.1f}%"
         except Exception:
             return "—"
 
@@ -544,20 +552,19 @@ class ClusterF(param.Parameterized):
     def update_saturation_panel(self):
         """Refresh the saturation metrics panel when super cluster changes."""
         scs_val = self._current_supercluster_metrics()
-        text = (
-            f"### Saturation\n"
-            f"SCS (Super Cluster): {self._format_pct(scs_val)}"
-        )
-        if hasattr(self, "saturation_panel") and isinstance(self.saturation_panel, pn.pane.Markdown):
+        text = f"### Saturation\nSCS (Super Cluster): {self._format_pct(scs_val)}"
+        if hasattr(self, "saturation_panel") and isinstance(
+            self.saturation_panel, pn.pane.Markdown
+        ):
             self.saturation_panel.object = text
         else:
-            self.saturation_panel = pn.pane.Markdown(text, margin=(0,5))
+            self.saturation_panel = pn.pane.Markdown(text, margin=(0, 5))
 
     def get_available_fine_thresholds(self):
         """Get available fine threshold values from the library dataframe."""
-        if not hasattr(self.library, 'df') or self.library.df is None:
+        if not hasattr(self.library, "df") or self.library.df is None:
             return [0.2]  # Default threshold if no data loaded
-        
+
         available_thresholds = []
         for column in self.library.df.columns:
             try:
@@ -568,7 +575,7 @@ class ClusterF(param.Parameterized):
                     available_thresholds.append(threshold_value)
             except ValueError:
                 continue
-        
+
         # Sort thresholds and return, or default if none found
         if available_thresholds:
             return sorted(available_thresholds)
@@ -578,10 +585,10 @@ class ClusterF(param.Parameterized):
     def update_fine_threshold_options(self):
         """Update the fine threshold selector options based on available data."""
         available_thresholds = self.get_available_fine_thresholds()
-        
+
         # Update the parameter objects
         self.param.fine_threshold.objects = available_thresholds
-        
+
         # Set default to first available threshold if current value is not available
         if self.fine_threshold not in available_thresholds:
             self.fine_threshold = available_thresholds[0]
@@ -601,10 +608,10 @@ class ClusterF(param.Parameterized):
         table_df = self.library.df.copy()
 
         # Add subcategory columns if they exist
-        if hasattr(self, 'subcategory_columns') and self.subcategory_columns:
+        if hasattr(self, "subcategory_columns") and self.subcategory_columns:
             for col_name, col_data in self.subcategory_columns.items():
                 # Map compound values to the column
-                table_df[col_name] = table_df['Compound'].map(col_data)
+                table_df[col_name] = table_df["Compound"].map(col_data)
 
         # Check if input is a single integer (super cluster number)
         if isinstance(clusters_or_super_cluster, (int, float)):
@@ -640,7 +647,9 @@ class ClusterF(param.Parameterized):
             table_df = table_df[table_df["Category"] != "Miss"]
 
         # Ensure all visible columns exist in table_df
-        available_columns = [col for col in self.visible_columns if col in table_df.columns]
+        available_columns = [
+            col for col in self.visible_columns if col in table_df.columns
+        ]
         table_df = table_df[available_columns].reset_index()
 
         return table_df
@@ -732,22 +741,28 @@ class ClusterF(param.Parameterized):
         if not hasattr(self.library, "dataset_df") or self.dataset_select is None:
             print("No dataset loaded to save")
             return
-        
+
         try:
             # Ensure dataset is up to date with latest clustering and Retest info
-            if hasattr(self.library, 'super_clusters'):
-                self.library.update_dataset_with_clustering(self.fine_threshold, self.coarse_threshold)
-            
+            if hasattr(self.library, "super_clusters"):
+                self.library.update_dataset_with_clustering(
+                    self.fine_threshold, self.coarse_threshold
+                )
+
             # Determine the output format based on file extension
-            if self.dataset_select.lower().endswith('.csv'):
+            if self.dataset_select.lower().endswith(".csv"):
                 # Save as CSV (backwards compatibility)
                 self.library.dataset_df.to_csv(self.dataset_select, index=False)
                 print(f"Dataset saved as CSV: {self.dataset_select}")
             else:
                 # Save as Parquet (preferred format)
-                parquet_path = self.dataset_select.replace('.csv', '.parquet') if self.dataset_select.endswith('.csv') else self.dataset_select
-                if not parquet_path.endswith('.parquet'):
-                    parquet_path += '.parquet'
+                parquet_path = (
+                    self.dataset_select.replace(".csv", ".parquet")
+                    if self.dataset_select.endswith(".csv")
+                    else self.dataset_select
+                )
+                if not parquet_path.endswith(".parquet"):
+                    parquet_path += ".parquet"
                 self.library.dataset_df.to_parquet(parquet_path, index=False)
                 print(f"Dataset saved as Parquet: {parquet_path}")
 
@@ -773,11 +788,19 @@ class ClusterF(param.Parameterized):
             try:
                 row = event.row
                 df = self.compound_table.value
-                if row is None or "Retest" not in df.columns or "Compound" not in df.columns:
+                if (
+                    row is None
+                    or "Retest" not in df.columns
+                    or "Compound" not in df.columns
+                ):
                     return
 
                 compound = df.at[row, "Compound"]
-                curr_val = bool(df.at[row, "Retest"]) if pd.notna(df.at[row, "Retest"]) else False
+                curr_val = (
+                    bool(df.at[row, "Retest"])
+                    if pd.notna(df.at[row, "Retest"])
+                    else False
+                )
                 new_val = not curr_val
 
                 # Update the visible table cell immediately
@@ -785,35 +808,53 @@ class ClusterF(param.Parameterized):
                 self.compound_table.value = df  # trigger update
 
                 # Propagate change to backing DataFrames
-                if hasattr(self.library, "df") and isinstance(self.library.df, pd.DataFrame):
+                if hasattr(self.library, "df") and isinstance(
+                    self.library.df, pd.DataFrame
+                ):
                     mask = self.library.df["Compound"] == compound
                     if mask.any():
                         self.library.df.loc[mask, "Retest"] = new_val
 
-                if hasattr(self.library, "dataset_df") and isinstance(self.library.dataset_df, pd.DataFrame):
+                if hasattr(self.library, "dataset_df") and isinstance(
+                    self.library.dataset_df, pd.DataFrame
+                ):
                     dmask = self.library.dataset_df["Compound"] == compound
                     if dmask.any():
                         self.library.dataset_df.loc[dmask, "Retest"] = new_val
 
-                if hasattr(self.library, "subset_df") and isinstance(self.library.subset_df, pd.DataFrame):
+                if hasattr(self.library, "subset_df") and isinstance(
+                    self.library.subset_df, pd.DataFrame
+                ):
                     smask = self.library.subset_df["Compound"] == compound
                     if smask.any():
                         self.library.subset_df.loc[smask, "Retest"] = new_val
 
                 # Keep dtypes consistent
                 try:
-                    self.library.df["Retest"] = self.library.df["Retest"].astype("boolean")
-                    if hasattr(self.library, "dataset_df") and isinstance(self.library.dataset_df, pd.DataFrame):
-                        self.library.dataset_df["Retest"] = self.library.dataset_df["Retest"].astype("boolean")
-                    if hasattr(self.library, "subset_df") and isinstance(self.library.subset_df, pd.DataFrame):
-                        self.library.subset_df["Retest"] = self.library.subset_df["Retest"].astype("boolean")
+                    self.library.df["Retest"] = self.library.df["Retest"].astype(
+                        "boolean"
+                    )
+                    if hasattr(self.library, "dataset_df") and isinstance(
+                        self.library.dataset_df, pd.DataFrame
+                    ):
+                        self.library.dataset_df["Retest"] = self.library.dataset_df[
+                            "Retest"
+                        ].astype("boolean")
+                    if hasattr(self.library, "subset_df") and isinstance(
+                        self.library.subset_df, pd.DataFrame
+                    ):
+                        self.library.subset_df["Retest"] = self.library.subset_df[
+                            "Retest"
+                        ].astype("boolean")
                 except Exception:
                     pass
 
                 # Persist clustering columns/Rerun merge so file saves stay in sync
                 if hasattr(self.library, "super_clusters"):
                     try:
-                        self.library.update_dataset_with_clustering(self.fine_threshold, self.coarse_threshold)
+                        self.library.update_dataset_with_clustering(
+                            self.fine_threshold, self.coarse_threshold
+                        )
                     except Exception:
                         pass
 
@@ -884,7 +925,9 @@ class ClusterF(param.Parameterized):
             _pd = pd
 
         new_df = event.new
-        old_df = event.old if event.old is not None else getattr(self, "_table_cache", None)
+        old_df = (
+            event.old if event.old is not None else getattr(self, "_table_cache", None)
+        )
         # Always update cache for subsequent diffs
         if hasattr(new_df, "copy"):
             self._table_cache = new_df.copy()
@@ -902,8 +945,12 @@ class ClusterF(param.Parameterized):
 
         # Build a diff of Retest values keyed by Compound
         try:
-            left = old_df[["Compound", "Retest"]].rename(columns={"Retest": "Retest_old"})
-            right = new_df[["Compound", "Retest"]].rename(columns={"Retest": "Retest_new"})
+            left = old_df[["Compound", "Retest"]].rename(
+                columns={"Retest": "Retest_old"}
+            )
+            right = new_df[["Compound", "Retest"]].rename(
+                columns={"Retest": "Retest_new"}
+            )
             merged = left.merge(right, on="Compound", how="outer")
         except Exception:
             return
@@ -918,19 +965,25 @@ class ClusterF(param.Parameterized):
             new_val = bool(row["Retest_new"]) if _pd.notna(row["Retest_new"]) else False
 
             # Update main library df
-            if hasattr(self.library, "df") and isinstance(self.library.df, _pd.DataFrame):
+            if hasattr(self.library, "df") and isinstance(
+                self.library.df, _pd.DataFrame
+            ):
                 mask = self.library.df["Compound"] == comp
                 if mask.any():
                     self.library.df.loc[mask, "Retest"] = new_val
 
             # Update dataset_df if present
-            if hasattr(self.library, "dataset_df") and isinstance(self.library.dataset_df, _pd.DataFrame):
+            if hasattr(self.library, "dataset_df") and isinstance(
+                self.library.dataset_df, _pd.DataFrame
+            ):
                 dmask = self.library.dataset_df["Compound"] == comp
                 if dmask.any():
                     self.library.dataset_df.loc[dmask, "Retest"] = new_val
 
             # Update subset_df if present
-            if hasattr(self.library, "subset_df") and isinstance(self.library.subset_df, _pd.DataFrame):
+            if hasattr(self.library, "subset_df") and isinstance(
+                self.library.subset_df, _pd.DataFrame
+            ):
                 smask = self.library.subset_df["Compound"] == comp
                 if smask.any():
                     self.library.subset_df.loc[smask, "Retest"] = new_val
@@ -938,17 +991,27 @@ class ClusterF(param.Parameterized):
         # Keep dtypes consistent ('boolean' avoids FutureWarning)
         try:
             self.library.df["Retest"] = self.library.df["Retest"].astype("boolean")
-            if hasattr(self.library, "dataset_df") and isinstance(self.library.dataset_df, _pd.DataFrame):
-                self.library.dataset_df["Retest"] = self.library.dataset_df["Retest"].astype("boolean")
-            if hasattr(self.library, "subset_df") and isinstance(self.library.subset_df, _pd.DataFrame):
-                self.library.subset_df["Retest"] = self.library.subset_df["Retest"].astype("boolean")
+            if hasattr(self.library, "dataset_df") and isinstance(
+                self.library.dataset_df, _pd.DataFrame
+            ):
+                self.library.dataset_df["Retest"] = self.library.dataset_df[
+                    "Retest"
+                ].astype("boolean")
+            if hasattr(self.library, "subset_df") and isinstance(
+                self.library.subset_df, _pd.DataFrame
+            ):
+                self.library.subset_df["Retest"] = self.library.subset_df[
+                    "Retest"
+                ].astype("boolean")
         except Exception:
             pass
 
         # Persist clustering columns/Rerun merge so file saves stay in sync
         if hasattr(self.library, "super_clusters"):
             try:
-                self.library.update_dataset_with_clustering(self.fine_threshold, self.coarse_threshold)
+                self.library.update_dataset_with_clustering(
+                    self.fine_threshold, self.coarse_threshold
+                )
             except Exception:
                 pass
 
@@ -1290,12 +1353,19 @@ class ClusterF(param.Parameterized):
                     compounds = current_table["Compound"].values
                     self.update_compound_grid(compounds)
             # Update the compound data chart with new colors
-            if hasattr(self, "compound_data_chart") and self.compound_data_chart.object is not None:
+            if (
+                hasattr(self, "compound_data_chart")
+                and self.compound_data_chart.object is not None
+            ):
                 # Get currently selected compounds from the table
                 if hasattr(self, "compound_table") and self.compound_table.selection:
                     selected_indices = self.compound_table.selection
-                    selected_compounds = self.compound_table.value.loc[selected_indices, "Compound"].values
-                    self.compound_data_chart.object = self.create_compound_data_chart(selected_compounds)
+                    selected_compounds = self.compound_table.value.loc[
+                        selected_indices, "Compound"
+                    ].values
+                    self.compound_data_chart.object = self.create_compound_data_chart(
+                        selected_compounds
+                    )
             # style the compound table with the new colors
             if hasattr(self, "compound_table"):
                 self.compound_table.value = (
