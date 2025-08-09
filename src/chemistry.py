@@ -345,6 +345,59 @@ class ChemLibrary:
         #         how='left'
         # )
 
+    def compute_saturation_metrics(self, fine_thresh):
+        """
+        Compute and attach saturation metrics to subset_df:
+        - SCS (Super Cluster Saturation): for each super cluster, fraction of non-miss compounds
+
+        Metric is merged back onto subset_df per Compound so it can be saved/exported.
+        """
+        if not hasattr(self, "df") or not hasattr(self, "subset_df"):
+            return
+
+        fine_col = str(fine_thresh)
+        # Ensure required columns exist
+        required_cols = {"Compound", fine_col, "Category"}
+        if not required_cols.issubset(set(self.df.columns)):
+            return
+
+        # If SuperCluster hasn't been computed yet, skip gracefully
+        has_super = "SuperCluster" in self.df.columns
+
+        df_main = self.df[["Compound", fine_col, "Category"]].copy()
+        if has_super:
+            df_main["SuperCluster"] = self.df["SuperCluster"]
+
+        # Helper to compute saturation: non-miss / total
+        def _saturation(group: pd.DataFrame) -> float:
+            total = len(group)
+            if total == 0:
+                return np.nan
+            non_miss = (group["Category"] != "Miss").sum()
+            return float(non_miss) / float(total)
+
+
+        # Super cluster saturation (SCS)
+        if has_super:
+            scs_series = df_main.dropna(subset=["SuperCluster"]).groupby("SuperCluster").apply(_saturation)
+            scs_map = scs_series.to_dict()
+        else:
+            scs_map = {}
+
+        # Map metrics back per compound using df_main (compound -> cluster ids)
+        df_metrics = df_main[["Compound", fine_col]].copy()
+
+        if has_super:
+            df_metrics["SCS"] = df_main["SuperCluster"].map(scs_map)
+        else:
+            df_metrics["SCS"] = np.nan
+
+        df_metrics = df_metrics.drop(columns=[fine_col])
+
+        # Merge into subset_df per compound
+        self.subset_df = self.subset_df.merge(df_metrics, on="Compound", how="left")
+
+
     def build_subgraph(self, member_cluster):
         """
         Builds subgraph of related clusters

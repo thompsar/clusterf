@@ -220,6 +220,11 @@ class ClusterF(param.Parameterized):
             object=None, sizing_mode="stretch_both", margin=0
         )
         self.common_substructure = None
+        # Saturation metrics panel (initialized empty; populated after recluster)
+        self.saturation_panel = pn.pane.Markdown(
+            "### Saturation\nSCS (Super Cluster): —",
+            margin=(0, 5),
+        )
 
     # Update graph view and table after slider release
     def update_throttled(self, event):
@@ -466,6 +471,13 @@ class ClusterF(param.Parameterized):
         # Update dataset_df with clustering information and current Retest values
         self.library.update_dataset_with_clustering(self.fine_threshold, self.coarse_threshold)
 
+        # Compute saturation metrics and attach to subset_df
+        try:
+            self.library.compute_saturation_metrics(self.fine_threshold)
+        except Exception as _e:
+            # Non-fatal if metrics fail; continue UI setup
+            pass
+
         self.param.cluster_slider.objects = list(
             range(1, len(self.library.super_clusters) + 1)
         )
@@ -500,6 +512,46 @@ class ClusterF(param.Parameterized):
         # Initialize the category histogram for the first super cluster
         if hasattr(self, "color_dict"):
             self.category_histogram.object = self.create_category_histogram()
+
+        # Update saturation metrics panel for first super cluster
+        self.update_saturation_panel()
+
+    def _current_supercluster_metrics(self):
+        """Return SCS for current super cluster and mean SbCS over its sub-clusters."""
+        try:
+            # Current super cluster compounds
+            sc_compounds = self.get_current_super_cluster_compounds()
+            # SCS from subset_df (per compound) averaged to display stable value
+            scs_val = np.nan
+            if hasattr(self.library, "subset_df") and "SCS" in self.library.subset_df.columns:
+                sc_vals = self.library.subset_df[self.library.subset_df["Compound"].isin(sc_compounds)]["SCS"]
+                if not sc_vals.empty:
+                    scs_val = float(np.nanmean(sc_vals.values))
+
+            return scs_val
+        except Exception:
+            return np.nan
+
+    def _format_pct(self, val):
+        try:
+            if val != val or val is None:  # NaN check
+                return "—"
+            return f"{100.0*float(val):.1f}%"
+        except Exception:
+            return "—"
+
+    @param.depends("cluster_slider", watch=True)
+    def update_saturation_panel(self):
+        """Refresh the saturation metrics panel when super cluster changes."""
+        scs_val = self._current_supercluster_metrics()
+        text = (
+            f"### Saturation\n"
+            f"SCS (Super Cluster): {self._format_pct(scs_val)}"
+        )
+        if hasattr(self, "saturation_panel") and isinstance(self.saturation_panel, pn.pane.Markdown):
+            self.saturation_panel.object = text
+        else:
+            self.saturation_panel = pn.pane.Markdown(text, margin=(0,5))
 
     def get_available_fine_thresholds(self):
         """Get available fine threshold values from the library dataframe."""
@@ -1626,6 +1678,8 @@ sidebar = pn.Column(
     ),
     clusterF.cluster_chart,
     clusterF.slider_widget,
+    # Saturation metrics panel (reacts via watcher on cluster_slider)
+    clusterF.saturation_panel,
     pn.Param(
         clusterF.param,
         parameters=["compound_input"],
