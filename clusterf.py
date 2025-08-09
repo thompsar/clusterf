@@ -48,11 +48,11 @@ TODO LIST:
     - [ ] Make clickable to select super cluster
     - [ ] Colorize based on category
 - [x] BUG: deselecting a node does not reset the compound grid or table
-- [ ] BUG: ? Where is cluster 5030? It is not a singleton but it is not in the cluster charts.
+- [x] BUG: ? Where is cluster 5030? It is not a singleton but it is not in the cluster charts.
     - 5030 gets tossed out during building of graph due to the fact that none of the compounds included match with other clusters under
         the conditions ive mostly tested (0.2, 0.4). Modifying fingerprinting scheme may help, but hasn't worked yet.
-    - [ ] FIX: Re-introduce pruned clusters to graph so that Compound Search works (fails currently). Do this by checking to see if they contain any compounds of interest!
--[ ] Add a way to triage compounds in the table (radio boxes that persist through selections, for example).
+    - [x] FIX: Re-introduce pruned clusters to graph so that Compound Search works (fails currently). Do this by checking to see if they contain any compounds of interest!
+-[x] Add a way to triage compounds in the table (radio boxes that persist through selections, for example).
 
 NEW:
 -[ ] Switching subsets causes key error with Category, likely need to reset the color widgets and histogram.
