@@ -6,3 +6,4 @@ pandas
 networkx
 rdkit
 ipython
+pyarrow
