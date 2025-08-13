@@ -17,6 +17,7 @@ class CompoundTable(param.Parameterized):
     app: "ClusterFApp" = param.Parameter(default=None, doc="Reference to main ClusterF application")
     show_miss_compounds = param.Boolean(default=True, doc="Whether to show 'Miss' compounds")
     selected_compounds = param.List(default=[], doc="Currently selected compounds")
+    current_super_cluster = param.Integer(default=None, doc="Current super cluster being displayed")
     
     def __init__(self, app: "ClusterFApp", **params):
         super().__init__(**params)
@@ -86,21 +87,25 @@ class CompoundTable(param.Parameterized):
         if not self.app.library:
             return
         
+        # Update current super cluster if provided
+        if super_cluster is not None:
+            self.current_super_cluster = super_cluster
+        
         try:
             if compounds is not None:
                 # Filter by specific compounds
                 table_df = self.app.library.df[
                     self.app.library.df["Compound"].isin(compounds)
                 ].copy()
-            elif super_cluster is not None:
-                # Filter by super cluster
+            elif self.current_super_cluster is not None:
+                # Filter by current super cluster
                 if "SuperCluster" in self.app.library.df.columns:
                     table_df = self.app.library.df[
-                        self.app.library.df["SuperCluster"] == super_cluster
+                        self.app.library.df["SuperCluster"] == self.current_super_cluster
                     ].copy()
                 else:
                     # Fallback to old method
-                    super_cluster_idx = super_cluster - 1
+                    super_cluster_idx = self.current_super_cluster - 1
                     if hasattr(self.app.library, 'super_clusters') and super_cluster_idx < len(self.app.library.super_clusters):
                         cluster_list = self.app.library.super_clusters[super_cluster_idx][2]
                         table_df = self.app.library.df[
@@ -115,6 +120,21 @@ class CompoundTable(param.Parameterized):
             # Filter out "Miss" compounds if toggle is disabled
             if not self.show_miss_compounds:
                 table_df = table_df[table_df["Category"] != "Miss"]
+            
+            # Select only the desired columns
+            desired_columns = ["Compound", "clogP", "Cluster", "Category", "Retest"]
+            available_columns = [col for col in desired_columns if col in table_df.columns]
+            
+            # If some columns are missing, add them with default values
+            for col in desired_columns:
+                if col not in table_df.columns:
+                    if col == "Retest":
+                        table_df[col] = False  # Default retest status
+                    else:
+                        table_df[col] = ""  # Default empty string
+            
+            # Select only the desired columns in the correct order
+            table_df = table_df[desired_columns]
             
             # Reset index
             table_df = table_df.reset_index(drop=True)
@@ -137,7 +157,7 @@ class CompoundTable(param.Parameterized):
         else:
             self.toggle_miss_button.name = "Show Misses"
         
-        # Refresh table with current data
+        # Refresh table with current super cluster context
         self.update_table()
     
     def _retest_selected(self, event):
@@ -202,3 +222,7 @@ class CompoundTable(param.Parameterized):
     def get_selected_compounds(self):
         """Get currently selected compounds."""
         return self.selected_compounds.copy()
+    
+    def clear_super_cluster_context(self):
+        """Clear the current super cluster context."""
+        self.current_super_cluster = None
