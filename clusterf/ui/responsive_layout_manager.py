@@ -142,5 +142,6 @@ class ResponsiveLayoutManager(param.Parameterized):
                 width=200
             ),
             pn.Spacer(),
-            margin=(5, 5)
+            margin=(10, 10),
+            styles={"border-bottom": "1px solid #eee", "padding-bottom": "10px"}
         )

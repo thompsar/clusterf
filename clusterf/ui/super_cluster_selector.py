@@ -43,7 +43,7 @@ class SuperClusterSelector(param.Parameterized):
             title="Super Cluster Selector",
             width=220,
             collapsed=False,
-            margin=(5, 5)
+            visible=False,  # Initially hidden until clusters are built
         )
         
         # Set up watchers for different update modes
@@ -67,12 +67,17 @@ class SuperClusterSelector(param.Parameterized):
             self.slider_widget.disabled = False
             self.current_super_cluster = 1  # Start with first super cluster
             
+            # Show the super cluster selector card
+            self.controls.visible = True
+            
             # Trigger the first super cluster view update
             self._update_cluster_view(1)
         else:
             self.slider_widget.disabled = True
             self.total_super_clusters = 1
             self.param.current_super_cluster.objects = [1]
+            # Hide the super cluster selector card
+            self.controls.visible = False
     
     def _on_slider_change(self, event):
         """Handle real-time slider changes."""
