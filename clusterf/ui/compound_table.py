@@ -23,6 +23,7 @@ class CompoundTable(param.Parameterized):
         super().__init__(**params)
         self.app = app
         
+
         # Create the table widget
         self.table_widget = pn.widgets.Tabulator(
             pd.DataFrame(),
@@ -35,11 +36,6 @@ class CompoundTable(param.Parameterized):
             styles={"padding": "0px"}
         )
         
-        # Enable editing for the table
-        self.table_widget.editable = True
-        
-        # Only allow editing of the Retest column
-        self.table_widget.editors = {"Retest": {"type": "tickCross"}}
         self.table_widget.formatters = {"Retest": {"type": "tickCross"}}
         
         # Create table controls
@@ -148,7 +144,8 @@ class CompoundTable(param.Parameterized):
             
             # Reset index
             table_df = table_df.reset_index(drop=True)
-            
+            #create editors for the table from the column names, set all to none unless the column name is Retest
+            self.table_widget.editors = {col: {"type": "tickCross"} if col == "Retest" else None for col in table_df.columns}
             # Update the table
             self.table_widget.value = table_df
             self.table_widget.disabled = False
