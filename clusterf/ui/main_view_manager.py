@@ -99,6 +99,10 @@ class MainViewManager(param.Parameterized):
     
     def _reset_main_view(self):
         """Reset the main view to the welcome message."""
+        # Clear super cluster context from table
+        if hasattr(self, 'compound_table'):
+            self.compound_table.clear_super_cluster_context()
+        
         self.main_content.objects = [
             pn.pane.Markdown(
                 "## Welcome to ClusterF\n\n"
@@ -131,6 +135,7 @@ class MainViewManager(param.Parameterized):
             self.compound_data_chart.update_chart(compounds)
         else:
             # Clear selections
+            self.compound_table.clear_super_cluster_context()
             self.compound_table.update_table()
             self.compound_grid.update_compounds([])
             self.compound_data_chart.update_chart([])
