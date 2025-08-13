@@ -35,6 +35,13 @@ class CompoundTable(param.Parameterized):
             styles={"padding": "0px"}
         )
         
+        # Enable editing for the table
+        self.table_widget.editable = True
+        
+        # Only allow editing of the Retest column
+        self.table_widget.editors = {"Retest": {"type": "tickCross"}}
+        self.table_widget.formatters = {"Retest": {"type": "tickCross"}}
+        
         # Create table controls
         self.controls = self._create_table_controls()
         
@@ -53,6 +60,9 @@ class CompoundTable(param.Parameterized):
         
         # Set up event handlers
         self.table_widget.param.watch(self._on_table_selection, "selection")
+        
+        # Watch for table value changes (when cells are edited)
+        self.table_widget.param.watch(self._on_table_value_changed, "value")
     
     def _create_table_controls(self):
         """Create table control buttons."""
@@ -226,3 +236,77 @@ class CompoundTable(param.Parameterized):
     def clear_super_cluster_context(self):
         """Clear the current super cluster context."""
         self.current_super_cluster = None
+    
+    def _on_table_value_changed(self, event):
+        """Handle table value changes when cells are edited in-place."""
+        if event.new is None or event.old is None:
+            return
+            
+        # Check if Retest column values have changed
+        if "Retest" not in event.new.columns or "Retest" not in event.old.columns:
+            return
+            
+        # Find compounds where Retest values have changed
+        old_df = event.old
+        new_df = event.new
+        
+        # Create a comparison DataFrame
+        comparison = pd.merge(
+            old_df[["Compound", "Retest"]].rename(columns={"Retest": "Retest_old"}),
+            new_df[["Compound", "Retest"]].rename(columns={"Retest": "Retest_new"}),
+            on="Compound",
+            how="outer"
+        )
+        
+        # Find rows where Retest values changed
+        changed = comparison[comparison["Retest_old"] != comparison["Retest_new"]]
+        
+        if changed.empty:
+            return
+            
+        # Propagate changes to backing DataFrames
+        for _, row in changed.iterrows():
+            compound = row["Compound"]
+            new_val = bool(row["Retest_new"]) if pd.notna(row["Retest_new"]) else False
+            
+            # Update main library df
+            if hasattr(self.app.library, "df") and isinstance(
+                self.app.library.df, pd.DataFrame
+            ):
+                mask = self.app.library.df["Compound"] == compound
+                if mask.any():
+                    self.app.library.df.loc[mask, "Retest"] = new_val
+
+            # Update dataset_df if present
+            if hasattr(self.app.library, "dataset_df") and isinstance(
+                self.app.library.dataset_df, pd.DataFrame
+            ):
+                dmask = self.app.library.dataset_df["Compound"] == compound
+                if dmask.any():
+                    self.app.library.dataset_df.loc[dmask, "Retest"] = new_val
+
+            # Update subset_df if present
+            if hasattr(self.app.library, "subset_df") and isinstance(
+                self.app.library.subset_df, pd.DataFrame
+            ):
+                smask = self.app.library.subset_df["Compound"] == compound
+                if smask.any():
+                    self.app.library.subset_df.loc[smask, "Retest"] = new_val
+
+        # Keep dtypes consistent
+        try:
+            self.app.library.df["Retest"] = self.app.library.df["Retest"].astype("boolean")
+            if hasattr(self.app.library, "dataset_df") and isinstance(
+                self.app.library.dataset_df, pd.DataFrame
+            ):
+                self.app.library.dataset_df["Retest"] = self.app.library.dataset_df[
+                    "Retest"
+                ].astype("boolean")
+            if hasattr(self.app.library, "subset_df") and isinstance(
+                self.app.library.subset_df, pd.DataFrame
+            ):
+                self.app.library.subset_df["Retest"] = self.app.library.subset_df[
+                    "Retest"
+                ].astype("boolean")
+        except Exception:
+            pass
