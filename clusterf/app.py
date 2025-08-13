@@ -6,6 +6,7 @@ import param
 from clusterf.ui.cluster_builder import SuperClusterBuilder
 from clusterf.ui.color_picker import CategoryColorPicker
 from clusterf.ui.main_view_manager import MainViewManager
+from clusterf.ui.super_cluster_selector import SuperClusterSelector
 
 if TYPE_CHECKING:
     from clusterf.core.chemistry import ChemLibrary
@@ -23,9 +24,11 @@ class ClusterFApp(param.Parameterized):
         self.sc_builder = SuperClusterBuilder(app=self)
         self.color_picker = CategoryColorPicker(app=self)
         self.main_view = MainViewManager(app=self)
+        self.super_cluster_selector = SuperClusterSelector(app=self)
 
         self.sidebar = pn.Column(
             self.sc_builder.controls, 
+            self.super_cluster_selector.controls,
             self.color_picker.controls, 
             width=200,
             margin=(5, 5)

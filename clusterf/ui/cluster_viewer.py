@@ -28,7 +28,7 @@ class SuperClusterViewer(param.Parameterized):
     selected_nodes = param.List(default=[], doc="Currently selected cluster nodes")
     
     # Plot configuration
-    plot_width = param.Integer(default=800, bounds=(400, 1600), doc="Width of the cluster plot")
+    plot_width = param.Integer(default=600, bounds=(400, 1600), doc="Width of the cluster plot")
     plot_height = param.Integer(default=600, bounds=(300, 1200), doc="Height of the cluster plot")
     point_size = param.Integer(default=25, bounds=(5, 50), doc="Size of cluster nodes")
     
@@ -160,8 +160,8 @@ class SuperClusterViewer(param.Parameterized):
         # Create HoloViews Points for the nodes
         self.points = hv.Points(data, ["x", "y"]).opts(
             size=self.point_size,
-            min_width=300,
-            min_height=300,
+            width=self.plot_width,
+            height=self.plot_height,
             responsive=True,
             xaxis=None,
             yaxis=None,
