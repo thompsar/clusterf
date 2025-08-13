@@ -3,6 +3,11 @@ from typing import TYPE_CHECKING
 import panel as pn
 import param
 from clusterf.ui.cluster_viewer import SuperClusterViewer
+from clusterf.ui.responsive_layout_manager import ResponsiveLayoutManager
+from clusterf.ui.compound_grid import CompoundGrid
+from clusterf.ui.category_histogram import CategoryHistogram
+from clusterf.ui.compound_data_chart import CompoundDataChart
+from clusterf.ui.compound_table import CompoundTable
 
 if TYPE_CHECKING:
     from clusterf.app import ClusterFApp
@@ -25,6 +30,13 @@ class MainViewManager(param.Parameterized):
         
         # Initialize visualization components
         self.cluster_viewer = SuperClusterViewer(app=app)
+        self.compound_grid = CompoundGrid(app=app)
+        self.category_histogram = CategoryHistogram(app=app)
+        self.compound_data_chart = CompoundDataChart(app=app)
+        self.compound_table = CompoundTable(app=app)
+        
+        # Initialize responsive layout manager
+        self.responsive_layout = ResponsiveLayoutManager(app=app)
         
         # Main content layout - will be populated after clustering
         self.main_content = pn.Column(
@@ -58,25 +70,21 @@ class MainViewManager(param.Parameterized):
         """Set up the main layout structure after clustering is complete."""
         if not self.app.library or not hasattr(self.app.library, 'super_clusters'):
             return
-            
-        # Create the main layout with cluster viewer (but don't initialize with data yet)
+        
+        # Update responsive layout with all components
+        components = {
+            'cluster_graph': self.cluster_viewer.view,
+            'compound_grid': self.compound_grid.view,
+            'category_histogram': self.category_histogram.view,
+            'compound_data_chart': self.compound_data_chart.view,
+            'compound_table': self.compound_table.view
+        }
+        self.responsive_layout.update_components(components)
+        
+        # Create the main layout with responsive layout manager
         self.main_content.objects = [
-            pn.Card(
-                self.cluster_viewer.view,
-                title="Cluster Network Graph",
-                collapsed=False,
-                margin=(5, 5)
-            ),
-            # Placeholder for additional visualizations
-            pn.Card(
-                pn.pane.Markdown(
-                    "Additional visualizations (compound table, histograms, etc.) "
-                    "will be added here."
-                ),
-                title="Additional Views",
-                collapsed=True,
-                margin=(5, 5)
-            )
+            self.responsive_layout.get_layout_controls(),
+            self.responsive_layout.get_current_layout()
         ]
     
     def _reset_main_view(self):
@@ -97,15 +105,39 @@ class MainViewManager(param.Parameterized):
         # Here we can update other views based on the selection
         print(f"Cluster nodes selected: {selected_nodes}")
         
-        # Future: Update compound table, histograms, etc. based on selection
-        # if selected_nodes:
-        #     self._update_compound_table(selected_nodes)
-        #     self._update_category_histogram(selected_nodes)
+        # Update compound table with selected clusters
+        if selected_nodes:
+            # Get compounds from selected clusters
+            compounds = []
+            for cluster in selected_nodes:
+                cluster_compounds = self.app.library.df[
+                    self.app.library.df["Cluster"] == cluster
+                ]["Compound"].tolist()
+                compounds.extend(cluster_compounds)
+            
+            # Update components with selected compounds
+            self.compound_table.update_table(compounds=compounds)
+            self.compound_grid.update_compounds(compounds)
+            self.compound_data_chart.update_chart(compounds)
+        else:
+            # Clear selections
+            self.compound_table.update_table()
+            self.compound_grid.update_compounds([])
+            self.compound_data_chart.update_chart([])
+    
+    def _on_compound_selection_change(self, selected_compounds):
+        """Handle compound selection changes from the compound table."""
+        # Update compound grid and data chart with selected compounds
+        self.compound_grid.update_compounds(selected_compounds)
+        self.compound_data_chart.update_chart(selected_compounds)
     
     def update_colors(self, color_dict):
         """Update colors across all visualizations."""
         if self.clusters_built and hasattr(self, 'cluster_viewer'):
             self.cluster_viewer.update_colors(color_dict)
+            self.compound_grid.update_colors(color_dict)
+            self.category_histogram.update_colors(color_dict)
+            self.compound_data_chart.update_colors(color_dict)
     
     def update_cluster_view(self, super_cluster_number):
         """Update the cluster view with a specific super cluster."""
@@ -141,6 +173,10 @@ class MainViewManager(param.Parameterized):
                     self.cluster_viewer.update_colors(
                         self.app.color_picker.color_dict
                     )
+                
+                # Update other components with the new super cluster
+                self.category_histogram.update_histogram(super_cluster_number)
+                self.compound_table.update_table(super_cluster=super_cluster_number)
                 
                 print(f"Main view updated to super cluster {super_cluster_number} with {len(cluster_nodes)} member clusters")
             

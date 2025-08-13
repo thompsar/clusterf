@@ -160,8 +160,8 @@ class SuperClusterViewer(param.Parameterized):
         # Create HoloViews Points for the nodes
         self.points = hv.Points(data, ["x", "y"]).opts(
             size=self.point_size,
-            width=self.plot_width,
-            height=self.plot_height,
+            min_width=300,
+            min_height=300,
             responsive=True,
             xaxis=None,
             yaxis=None,

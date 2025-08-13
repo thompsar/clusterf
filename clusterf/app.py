@@ -48,6 +48,13 @@ class ClusterFApp(param.Parameterized):
         # to notify the app of selection changes
         if hasattr(self.main_view, '_on_cluster_selection_change'):
             self.main_view._on_cluster_selection_change(selected_nodes)
+    
+    def _on_compound_selection_change(self, selected_compounds):
+        """Handle compound selection changes from the compound table."""
+        # This method can be called by the compound table
+        # to notify the app of compound selection changes
+        if hasattr(self.main_view, '_on_compound_selection_change'):
+            self.main_view._on_compound_selection_change(selected_compounds)
 
     def serve(self):
         return pn.Row(
