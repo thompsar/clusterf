@@ -43,9 +43,13 @@ class CompoundDataChart(param.Parameterized):
         if compound_ids is not None:
             self.selected_compounds = compound_ids
         
+        # Get current colors from the app's color picker if available
+        if hasattr(self.app, 'color_picker') and self.app.color_picker.color_dict:
+            self.color_dict = self.app.color_picker.color_dict.copy()
+        
         if not self.selected_compounds or not self.app.library:
             self.chart_pane.object = hv.Text(0.5, 0.5, "No compounds selected").opts(
-                width=400, height=300, xaxis=None, yaxis=None
+                width=600, height=400, xaxis=None, yaxis=None
             )
             return
         
@@ -57,7 +61,7 @@ class CompoundDataChart(param.Parameterized):
             
             if compound_df.empty:
                 self.chart_pane.object = hv.Text(0.5, 0.5, "No data available for selected compounds").opts(
-                    width=400, height=300, xaxis=None, yaxis=None
+                    width=600, height=400, xaxis=None, yaxis=None
                 )
                 return
             
@@ -76,31 +80,30 @@ class CompoundDataChart(param.Parameterized):
                 how="left"
             )
             
-            # Add colors
+            # Add colors using color_dict mapping (matching clusterf.py)
             stats_df["Color"] = stats_df["Category"].map(self.color_dict)
-            stats_df.loc[stats_df["Color"].isna(), "Color"] = "#999999"
-            # Ensure Color column is string type to avoid pandas warnings
-            stats_df["Color"] = stats_df["Color"].astype(str)
+            stats_df.loc[stats_df["Color"].isna(), "Color"] = "#999999"  # Default color for missing categories
             
-            # Create title
+            # Create title based on number of compounds (matching clusterf.py)
             if len(self.selected_compounds) == 1:
-                title = f"{metric} for Compound {self.selected_compounds[0]}"
+                title = f"Delta Lifetime Z for Compound {self.selected_compounds[0]}"
             else:
-                title = f"{metric} for {len(self.selected_compounds)} Compounds"
+                title = f"Delta Lifetime Z for {len(self.selected_compounds)} Compounds"
             
-            # Calculate y-axis limits
+            # Calculate symmetrical y-axis limits based on data (matching clusterf.py)
             max_abs_value = max(abs(stats_df["Mean"].min()), abs(stats_df["Mean"].max()))
+            # Add some padding and ensure we can see ±4 lines
             y_limit = max(max_abs_value * 1.1, 4.5)
             
-            # Create bar chart
+            # Create bar chart (matching clusterf.py dimensions and options)
             bars = hv.Bars(
                 stats_df,
                 kdims=["Construct", "Compound"],
                 vdims=["Mean", "Category", "Color"]
             ).opts(
                 color="Color",
-                width=400,
-                height=300,
+                width=600,
+                height=400,
                 title=title,
                 ylabel=metric,
                 xlabel="Construct",
@@ -112,7 +115,7 @@ class CompoundDataChart(param.Parameterized):
                 legend_position="right"
             )
             
-            # Add reference lines
+            # Add horizontal reference lines at ±4 (matching clusterf.py)
             hline_pos4 = hv.HLine(4).opts(
                 color="red", line_dash="dashed", line_width=2, alpha=0.7
             )
@@ -120,17 +123,22 @@ class CompoundDataChart(param.Parameterized):
                 color="red", line_dash="dashed", line_width=2, alpha=0.7
             )
             
-            # Combine chart elements
+            # Combine bars with reference lines
             chart = bars * hline_pos4 * hline_neg4
             self.chart_pane.object = chart
             
         except Exception as e:
             print(f"Error creating compound data chart: {e}")
             self.chart_pane.object = hv.Text(0.5, 0.5, f"Error: {str(e)}").opts(
-                width=400, height=300, xaxis=None, yaxis=None
+                width=600, height=400, xaxis=None, yaxis=None
             )
     
     def update_colors(self, color_dict: dict):
         """Update the color scheme and refresh the chart."""
         self.color_dict = color_dict.copy()
+        # Force refresh the chart with new colors
+        self.update_chart()
+        
+    def refresh_chart(self):
+        """Force refresh the chart with current data and colors."""
         self.update_chart()

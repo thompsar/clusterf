@@ -43,9 +43,13 @@ class CategoryHistogram(param.Parameterized):
         if super_cluster_number is not None:
             self.current_super_cluster = super_cluster_number
         
-        if not self.app.library or not hasattr(self.app.library, 'super_clusters'):
-            self.histogram_pane.object = hv.Text(0.5, 0.5, "No data available").opts(
-                width=400, height=300, xaxis=None, yaxis=None
+        # Get current colors from the app's color picker if available
+        if hasattr(self.app, 'color_picker') and self.app.color_picker.color_dict:
+            self.color_dict = self.app.color_picker.color_dict.copy()
+        
+        if not self.app.library or not hasattr(self.app.library, 'subset_df'):
+            self.histogram_pane.object = hv.Text(0.5, 0.5, "No subset data available for histogram.").opts(
+                width=600, height=250, xaxis=None, yaxis=None
             )
             return
         
@@ -55,7 +59,7 @@ class CategoryHistogram(param.Parameterized):
             
             if not cluster_compounds:
                 self.histogram_pane.object = hv.Text(0.5, 0.5, "No compounds in super cluster").opts(
-                    width=400, height=300, xaxis=None, yaxis=None
+                    width=600, height=250, xaxis=None, yaxis=None
                 )
                 return
             
@@ -65,43 +69,61 @@ class CategoryHistogram(param.Parameterized):
             ]
             
             if subset_data.empty:
-                self.histogram_pane.object = hv.Text(0.5, 0.5, "No category data available").opts(
-                    width=400, height=300, xaxis=None, yaxis=None
+                self.histogram_pane.object = hv.Text(0.5, 0.5, "No category data for current super cluster.").opts(
+                    width=600, height=250, xaxis=None, yaxis=None
                 )
                 return
             
-            # Count categories (excluding "Miss")
+            # Get all available categories from color picker to ensure completeness
+            all_categories = list(self.color_dict.keys()) if self.color_dict else []
+            
+            # Sort categories using the same logic as clusterf.py
+            def category_sort_key(category):
+                c = str(category).lower()
+                if "selective" in c:
+                    return (0, c)
+                if "universal" in c:
+                    return (1, c)
+                if "increaser" in c or "decreaser" in c:
+                    return (2, c)
+                if "bidirectional" in c:
+                    return (3, c)
+                if "interfering" in c:
+                    return (4, c)
+                return (5, c)
+            
+            all_categories = sorted(all_categories, key=category_sort_key)
+            
+            # Count categories in current super cluster (excluding "Miss")
             category_counts = subset_data[subset_data["Category"] != "Miss"]["Category"].value_counts()
             
-            if category_counts.empty:
-                self.histogram_pane.object = hv.Text(0.5, 0.5, "No valid categories found").opts(
-                    width=400, height=300, xaxis=None, yaxis=None
-                )
-                return
-            
-            # Create histogram data
+            # Create complete DataFrame including all categories (even with 0 counts)
             hist_data = pd.DataFrame({
-                "Category": category_counts.index,
-                "Count": category_counts.values,
-                "Percentage": [f"{int(100 * count / len(cluster_compounds))}%" 
-                             for count in category_counts.values]
+                "Category": all_categories,
+                "Count": [category_counts.get(cat, 0) for cat in all_categories],
+                "%Total": [f"{int(100 * category_counts.get(cat, 0) / len(cluster_compounds))}%" 
+                          for cat in all_categories]
             })
             
-            # Add colors
-            hist_data["Color"] = [self.color_dict.get(cat, "#999999") for cat in hist_data["Category"]]
+            # Map colors from color_dict
+            colors = []
+            for category in hist_data["Category"]:
+                colors.append(self.color_dict.get(category, "#999999"))
+            
+            hist_data["Color"] = colors
             
             # Create HoloViews bar chart
-            bars = hv.Bars(hist_data, ["Category"], ["Count", "Percentage", "Color"]).opts(
+            bars = hv.Bars(hist_data, ["Category"], ["Count", "%Total", "Color"]).opts(
                 color="Color",
                 min_width=300,
-                min_height=200,
+                min_height=300,
                 responsive=True,
                 title=f"Category Distribution - Super Cluster {self.current_super_cluster}",
                 ylabel="Count",
                 xlabel="",
                 xrotation=45,
                 tools=["hover"],
-                ylim=(0, 1.2 * hist_data["Count"].max())
+                ylim=(0, 1.2 * hist_data["Count"].max() if hist_data["Count"].max() > 0 else 1)
             )
             
             self.histogram_pane.object = bars
@@ -109,12 +131,17 @@ class CategoryHistogram(param.Parameterized):
         except Exception as e:
             print(f"Error creating category histogram: {e}")
             self.histogram_pane.object = hv.Text(0.5, 0.5, f"Error: {str(e)}").opts(
-                width=400, height=300, xaxis=None, yaxis=None
+                width=600, height=250, xaxis=None, yaxis=None
             )
     
     def update_colors(self, color_dict: dict):
         """Update the color scheme and refresh the histogram."""
         self.color_dict = color_dict.copy()
+        # Force refresh the histogram with new colors
+        self.update_histogram()
+        
+    def refresh_histogram(self):
+        """Force refresh the histogram with current data and colors."""
         self.update_histogram()
     
     def _get_current_super_cluster_compounds(self):
