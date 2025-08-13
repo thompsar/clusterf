@@ -48,41 +48,18 @@ class MainViewManager(param.Parameterized):
         """Handle when super clusters are built and update the main view."""
         if event.new and self.app.library:
             self.clusters_built = True
-            self._setup_main_visualizations()
+            # Don't automatically set up visualizations - let the super cluster selector handle this
+            self._setup_main_layout()
         else:
             self.clusters_built = False
             self._reset_main_view()
     
-    def _setup_main_visualizations(self):
-        """Set up the main visualization layout after clustering is complete."""
+    def _setup_main_layout(self):
+        """Set up the main layout structure after clustering is complete."""
         if not self.app.library or not hasattr(self.app.library, 'super_clusters'):
             return
             
-        # Get the first super cluster and build subgraph for it
-        if not self.app.library.super_clusters:
-            return
-            
-        # Get the first cluster node from the first super cluster (following original clusterf.py pattern)
-        first_super_cluster = self.app.library.super_clusters[0]
-        cluster_nodes = first_super_cluster[2]  # [super_cluster_number, compound_count, cluster_nodes]
-        member_cluster = cluster_nodes[0]
-        
-        # Build subgraph for this cluster
-        self.app.library.build_subgraph(member_cluster)
-        
-        # Initialize cluster viewer with the subgraph
-        if hasattr(self.app.library, 'sub_graph'):
-            self.cluster_viewer.initialize_graph(
-                self.app.library.sub_graph
-            )
-        
-        # Update colors from color picker
-        if hasattr(self.app, 'color_picker') and self.app.color_picker.color_dict:
-            self.cluster_viewer.update_colors(
-                self.app.color_picker.color_dict
-            )
-        
-        # Create the main layout with cluster viewer
+        # Create the main layout with cluster viewer (but don't initialize with data yet)
         self.main_content.objects = [
             pn.Card(
                 self.cluster_viewer.view,
@@ -129,6 +106,46 @@ class MainViewManager(param.Parameterized):
         """Update colors across all visualizations."""
         if self.clusters_built and hasattr(self, 'cluster_viewer'):
             self.cluster_viewer.update_colors(color_dict)
+    
+    def update_cluster_view(self, super_cluster_number):
+        """Update the cluster view with a specific super cluster."""
+        if not self.clusters_built or not self.app.library or not hasattr(self.app.library, 'super_clusters'):
+            return
+        
+        try:
+            # Get the super cluster data (1-indexed to 0-indexed)
+            super_cluster_idx = super_cluster_number - 1
+            if super_cluster_idx >= len(self.app.library.super_clusters):
+                return
+            
+            super_cluster_data = self.app.library.super_clusters[super_cluster_idx]
+            cluster_nodes = super_cluster_data[2]  # [super_cluster_number, compound_count, cluster_nodes]
+            
+            if not cluster_nodes:
+                return
+            
+            # Get the first member cluster from the super cluster
+            member_cluster = cluster_nodes[0]
+            
+            # Build subgraph for this cluster
+            self.app.library.build_subgraph(member_cluster)
+            
+            # Initialize cluster viewer with the subgraph
+            if hasattr(self.app.library, 'sub_graph'):
+                self.cluster_viewer.initialize_graph(
+                    self.app.library.sub_graph
+                )
+                
+                # Update colors from color picker
+                if hasattr(self.app, 'color_picker') and self.app.color_picker.color_dict:
+                    self.cluster_viewer.update_colors(
+                        self.app.color_picker.color_dict
+                    )
+                
+                print(f"Main view updated to super cluster {super_cluster_number} with {len(cluster_nodes)} member clusters")
+            
+        except Exception as e:
+            print(f"Error updating main view for super cluster {super_cluster_number}: {e}")
     
     @property
     def view(self):
