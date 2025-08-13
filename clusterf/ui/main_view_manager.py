@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING
 import panel as pn
 import param
 from clusterf.ui.cluster_viewer import SuperClusterViewer
-from clusterf.ui.responsive_layout_manager import ResponsiveLayoutManager
 from clusterf.ui.compound_grid import CompoundGrid
 from clusterf.ui.category_histogram import CategoryHistogram
 from clusterf.ui.compound_data_chart import CompoundDataChart
@@ -34,9 +33,6 @@ class MainViewManager(param.Parameterized):
         self.category_histogram = CategoryHistogram(app=app)
         self.compound_data_chart = CompoundDataChart(app=app)
         self.compound_table = CompoundTable(app=app)
-        
-        # Initialize responsive layout manager
-        self.responsive_layout = ResponsiveLayoutManager(app=app)
         
         # Main content layout - will be populated after clustering
         self.main_content = pn.Column(
@@ -72,21 +68,34 @@ class MainViewManager(param.Parameterized):
         if not self.app.library or not hasattr(self.app.library, 'super_clusters'):
             return
         
-        # Update responsive layout with all components
-        components = {
-            'cluster_graph': self.cluster_viewer.view,
-            'compound_grid': self.compound_grid.view,
-            'category_histogram': self.category_histogram.view,
-            'compound_data_chart': self.compound_data_chart.view,
-            'compound_table': self.compound_table.view
-        }
-        self.responsive_layout.update_components(components)
+        # Create the GridSpec layout matching clusterf.py
+        main_grid = pn.GridSpec(
+            nrows=3,
+            ncols=2,
+            sizing_mode="stretch_both",
+            margin=0,
+            name="Main Layout",
+            styles={"gap": "2px", "padding": "2px", "box-sizing": "border-box"},
+        )
         
-        # Create the main layout with responsive layout manager
-        self.main_content.objects = [
-            self.responsive_layout.get_layout_controls(),
-            self.responsive_layout.get_current_layout()
-        ]
+        # Layout matching clusterf.py:
+        # Row 0, Col 0: Network graph
+        main_grid[0, 0] = self.cluster_viewer.view
+        # Row 0, Col 1: Compound grid (carousel)
+        main_grid[0:2, 1] = self.compound_grid.view
+        # Row 1, Col 0: Category histogram
+        main_grid[1, 0] = self.category_histogram.view
+        # Row 2, Col 0: Compound table (Tabulator)
+        main_grid[2, 0] = pn.Row(
+            self.compound_table.view,
+            sizing_mode="stretch_width",
+            margin=0,
+        )
+        # Row 2, Col 1: Compound lifetime chart
+        main_grid[2, 1] = self.compound_data_chart.view
+        
+        # Update the main content
+        self.main_content.objects = [main_grid]
     
     def _reset_main_view(self):
         """Reset the main view to the welcome message."""
