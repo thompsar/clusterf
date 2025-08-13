@@ -34,19 +34,7 @@ class SuperClusterBuilder(param.Parameterized):
                     library_name = f.replace(".parquet", "")
                     compound_libraries.append(library_name)
         
-        compound_libraries = sorted(compound_libraries)
-        self.param.library_select.objects = compound_libraries
-        if compound_libraries:
-            self.library_select = compound_libraries[0]
-
-        datasets = sorted(
-            f for f in os.listdir(app.DATASETS_DIR) if f.endswith((".csv", ".parquet"))
-        )
-        self.param.dataset_select.objects = datasets
-        if datasets:
-            self.dataset_select = datasets[0]
-
-        # --- Create widgets---
+        # --- Create widgets first---
         self.library_select_widget = pn.widgets.Select.from_param(
             self.param.library_select, name="Library", width=200
         )
@@ -79,6 +67,7 @@ class SuperClusterBuilder(param.Parameterized):
             width=200,
         )
 
+        # Create controls first
         self.controls = pn.Card(
             self.library_select_widget,
             self.dataset_select_widget,
@@ -89,6 +78,19 @@ class SuperClusterBuilder(param.Parameterized):
             width=220,
             collapsed=False,
         )
+
+        # Now set the library and dataset selections (this will trigger the watchers)
+        compound_libraries = sorted(compound_libraries)
+        self.param.library_select.objects = compound_libraries
+        if compound_libraries:
+            self.library_select = compound_libraries[0]
+
+        datasets = sorted(
+            f for f in os.listdir(app.DATASETS_DIR) if f.endswith((".csv", ".parquet"))
+        )
+        self.param.dataset_select.objects = datasets
+        if datasets:
+            self.dataset_select = datasets[0]
 
     @param.depends("library_select", watch=True)
     def _load_library(self):
@@ -105,6 +107,9 @@ class SuperClusterBuilder(param.Parameterized):
             
             # Reset clusters when library changes
             self.clusters_built = False
+            
+            # Expand the cluster builder card when library changes
+            self.controls.collapsed = False
             # print(self.app.library.df.head())
 
     def _update_clustering_options(self):
@@ -134,6 +139,9 @@ class SuperClusterBuilder(param.Parameterized):
             )
             # Reset clusters when dataset changes
             self.clusters_built = False
+            
+            # Expand the cluster builder card when dataset changes
+            self.controls.collapsed = False
             # print(self.app.library.dataset_df.head())
     
     @param.depends("method", "fine_threshold", "coarse_threshold", watch=True)
@@ -146,6 +154,9 @@ class SuperClusterBuilder(param.Parameterized):
                 method=self.method
             )
         self.clusters_built = False
+        
+        # Expand the cluster builder card when parameters change
+        self.controls.collapsed = False
 
     @param.depends("cluster_button", watch=True)
     def _build_super_clusters(self):
@@ -154,10 +165,14 @@ class SuperClusterBuilder(param.Parameterized):
                 self.app.library.cluster_subset_df(self.coarse_threshold)
                 self.app.library.build_graph(self.coarse_threshold)
                 
+                # Collapse the cluster builder card after successful clustering
+                self.controls.collapsed = True
                 # Signal that clusters have been built successfully
                 self.clusters_built = True
                 print(f"Super clusters built successfully! "
                       f"Found {len(getattr(self.app.library, 'super_clusters', []))} super clusters.")
+                
+                
                 
             except Exception as e:
                 print(f"Error building super clusters: {e}")

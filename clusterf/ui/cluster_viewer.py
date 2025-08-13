@@ -162,6 +162,7 @@ class SuperClusterViewer(param.Parameterized):
             size=self.point_size,
             min_width=300,
             min_height=300,
+            max_width=600,
             responsive=True,
             xaxis=None,
             yaxis=None,
@@ -242,7 +243,9 @@ class SuperClusterViewer(param.Parameterized):
                 non_selected_points = hv.Points(non_selected_data).opts(
                     size=self.point_size, 
                     color="color",
-                    alpha=0.6
+                    alpha=0.6,
+                    xaxis=None,
+                    yaxis=None,
                 )
             else:
                 non_selected_points = hv.Points([]).opts(size=0)

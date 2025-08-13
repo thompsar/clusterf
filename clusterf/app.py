@@ -28,10 +28,11 @@ class ClusterFApp(param.Parameterized):
 
         self.sidebar = pn.Column(
             self.sc_builder.controls, 
-            self.super_cluster_selector.controls,
             self.color_picker.controls, 
-            width=200,
-            margin=(5, 5)
+            self.super_cluster_selector.controls,
+            width=250,
+            margin=(5, 5),
+            styles={"padding": "10px", "border-right": "1px solid #ddd"}
         )
         
         # Watch for color changes and propagate to main view
@@ -59,8 +60,10 @@ class ClusterFApp(param.Parameterized):
     def serve(self):
         return pn.Row(
             self.sidebar,
+            pn.Spacer(width=10),  # Add spacing between sidebar and main view
             self.main_view.view,
-            sizing_mode="stretch_both"
+            sizing_mode="stretch_both",
+            margin=0
         )
 
 

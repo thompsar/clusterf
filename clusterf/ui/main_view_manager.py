@@ -48,7 +48,8 @@ class MainViewManager(param.Parameterized):
                 margin=(20, 20)
             ),
             sizing_mode="stretch_both",
-            margin=0
+            margin=0,
+            styles={"padding": "10px"}
         )
         
         # Watch for clustering completion
