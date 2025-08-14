@@ -18,6 +18,7 @@ class CompoundDataChart(param.Parameterized):
     app: "ClusterFApp" = param.Parameter(default=None, doc="Reference to main ClusterF application")
     color_dict = param.Dict(default={}, doc="Color mapping for categories")
     selected_compounds = param.List(default=[], doc="Currently selected compounds")
+    show_miss_compounds = param.Boolean(default=True, doc="Whether to show 'Miss' compounds")
     
     def __init__(self, app: "ClusterFApp", **params):
         super().__init__(**params)
@@ -64,6 +65,25 @@ class CompoundDataChart(param.Parameterized):
                     width=600, height=400, xaxis=None, yaxis=None
                 )
                 return
+            
+            # Filter out "Miss" compounds if show_miss_compounds is False
+            if not self.show_miss_compounds:
+                # Get category information from the main library df
+                category_info = self.app.library.df[
+                    self.app.library.df["Compound"].isin(self.selected_compounds)
+                ][["Compound", "Category"]]
+                
+                # Filter out Miss compounds
+                non_miss_compounds = category_info[category_info["Category"] != "Miss"]["Compound"].tolist()
+                
+                # Update compound_df to only include non-Miss compounds
+                compound_df = compound_df[compound_df["Compound"].isin(non_miss_compounds)]
+                
+                if compound_df.empty:
+                    self.chart_pane.object = hv.Text(0.5, 0.5, "No non-Miss compounds available").opts(
+                        width=600, height=400, xaxis=None, yaxis=None
+                    )
+                    return
             
             # Create statistics
             stats_df = (
@@ -142,3 +162,15 @@ class CompoundDataChart(param.Parameterized):
     def refresh_chart(self):
         """Force refresh the chart with current data and colors."""
         self.update_chart()
+    
+    def get_show_miss_compounds(self) -> bool:
+        """Get the current state of show_miss_compounds."""
+        return self.show_miss_compounds
+    
+    def set_show_miss_compounds(self, show_miss_compounds: bool):
+        """Set the show_miss_compounds state and update the chart if needed."""
+        if self.show_miss_compounds != show_miss_compounds:
+            self.show_miss_compounds = show_miss_compounds
+            # Update the chart with current compounds to apply the new filter
+            if self.selected_compounds:
+                self.update_chart()
