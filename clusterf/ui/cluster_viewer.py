@@ -172,7 +172,7 @@ class SuperClusterViewer(param.Parameterized):
             min_width=300,
             min_height=300,
             max_width=600,
-            responsive=True,
+            responsive=False,
             xaxis=None,
             yaxis=None,
             # Tools
