@@ -30,7 +30,7 @@ class SuperClusterViewer(param.Parameterized):
     # Plot configuration
     plot_width = param.Integer(default=600, bounds=(400, 1600), doc="Width of the cluster plot")
     plot_height = param.Integer(default=600, bounds=(300, 1200), doc="Height of the cluster plot")
-    point_size = param.Integer(default=25, bounds=(5, 50), doc="Size of cluster nodes")
+    point_size = param.Integer(default=50, bounds=(5, 50), doc="Size of cluster nodes")
     
     def __init__(self, **params):
         super().__init__(**params)
