@@ -81,8 +81,8 @@ class CompoundTable(param.Parameterized):
         self.retest_button.on_click(self._retest_selected)
         
         return pn.Row(
-            self.toggle_miss_button,
             self.retest_button,
+            self.toggle_miss_button,
             sizing_mode="fixed",
             width=250,
             margin=(0, 2, 0, 0)
@@ -129,7 +129,8 @@ class CompoundTable(param.Parameterized):
             
             # Select only the desired columns
             desired_columns = ["Compound", "clogP", "Cluster", "Category", "Retest"]
-            available_columns = [col for col in desired_columns if col in table_df.columns]
+            # TODO: add a column picker
+            #available_columns = [col for col in desired_columns if col in table_df.columns]
             
             # If some columns are missing, add them with default values
             for col in desired_columns:
