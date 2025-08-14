@@ -16,6 +16,8 @@ class SuperClusterViewer(param.Parameterized):
     """
     A modular viewer for displaying cluster graphs using HoloViews.
     Handles visualization of compound clusters with interactive features.
+    Note: Because we are using overlays for nodes and labels, only the labels trigger selection events.
+    The nodes are not strictly selected but will trigger styling changes. ITS DUMB.
     """
 
     # Parameters
@@ -192,15 +194,14 @@ class SuperClusterViewer(param.Parameterized):
         # Set up selection stream
         self.selection = Selection1D(source=self.graph)
         self.selection.param.watch(self._on_selection_change, "index")
-
+    
         # Update the plot
         self.plot.object = self.graph
 
     def _on_selection_change(self, event):
         """Handle changes in node selection."""
         indices = self.selection.index if self.selection else []
-        print("A selection change has occurred")
-        print(indices)
+        
         if indices:
             node_list = list(self.G.nodes())
             self.selected_nodes = [node_list[i] for i in indices]
@@ -216,42 +217,6 @@ class SuperClusterViewer(param.Parameterized):
             # Clear selection in app
             if hasattr(self.app, "_on_cluster_selection_change"):
                 self.app._on_cluster_selection_change(self.selected_nodes)
-
-        # Update the styling without recreating the graph
-        self._update_styling()
-
-    def _update_styling(self):
-        """Update the graph styling based on current selection without recreating the graph."""
-        if not self.graph or not self.G:
-            return
-
-        # Update node attributes for selection styling
-        for node in self.G.nodes():
-            if node in self.selected_nodes:
-                self.G.nodes[node]["size"] = self.point_size * 2
-                self.G.nodes[node]["line_width"] = 2
-            else:
-                self.G.nodes[node]["size"] = self.point_size
-                self.G.nodes[node]["line_width"] = 0
-
-        # Update edge attributes for selection styling
-        for edge in self.G.edges():
-            if edge[0] in self.selected_nodes or edge[1] in self.selected_nodes:
-                self.G.edges[edge]["line_width"] = 2
-                self.G.edges[edge]["line_color"] = "black"
-                self.G.edges[edge]["alpha"] = 1.0
-            else:
-                self.G.edges[edge]["line_width"] = 1
-                self.G.edges[edge]["line_color"] = "gray"
-                self.G.edges[edge]["alpha"] = 0.1
-
-    def _update_plot(self):
-        """Update the graph plot with current selection state."""
-        if not self.graph:
-            return
-
-        # Use the styling update method
-        self._update_styling()
 
     def update_colors(self, color_dict):
         """
