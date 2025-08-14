@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING
 import panel as pn
 import holoviews as hv
 import param
-import pandas as pd
 import numpy as np
 from holoviews.streams import Selection1D
 import networkx as nx
