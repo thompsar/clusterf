@@ -21,9 +21,6 @@ class CompoundTable(param.Parameterized):
         default=False, doc="Whether to show 'Miss' compounds"
     )
     selected_compounds = param.List(default=[], doc="Currently selected compounds")
-    full_selected_compounds = param.List(
-        default=[], doc="Full selection including misses"
-    )
     current_super_cluster = param.Integer(
         default=None, doc="Current super cluster being displayed"
     )
@@ -164,11 +161,8 @@ class CompoundTable(param.Parameterized):
 
     def _toggle_miss_compounds(self, event):
         """Toggle the display of 'Miss' compounds."""
-        # Store current selection before toggling
-        current_selection = self.selected_compounds.copy()
-
         self.show_miss_compounds = not self.show_miss_compounds
-
+        self.clear_selection()
         # Update button label
         if self.show_miss_compounds:
             self.toggle_miss_button.name = "Hide Misses"
@@ -178,47 +172,9 @@ class CompoundTable(param.Parameterized):
         # Refresh table with current super cluster context
         self.update_table()
 
-        # Restore selection after table update
-        if self.show_miss_compounds and self.full_selected_compounds:
-            # When showing misses, restore the full selection
-            self._restore_full_selection()
-        elif not self.show_miss_compounds and current_selection:
-            # When hiding misses, restore the filtered selection
-            self._restore_filtered_selection(current_selection)
-
         # Notify app of miss compounds toggle change
         if hasattr(self.app, "_on_miss_compounds_toggle"):
             self.app._on_miss_compounds_toggle(self.show_miss_compounds)
-
-    def _restore_full_selection(self):
-        """Restore the full selection including misses."""
-        if not self.full_selected_compounds or self.table_widget.value.empty:
-            return
-
-        # Find indices of full selected compounds in the current table
-        full_selection_indices = []
-        for i, compound in enumerate(self.table_widget.value["Compound"]):
-            if compound in self.full_selected_compounds:
-                full_selection_indices.append(i)
-
-        # Set the selection
-        if full_selection_indices:
-            self.table_widget.selection = full_selection_indices
-
-    def _restore_filtered_selection(self, filtered_selection):
-        """Restore the filtered selection (without misses)."""
-        if not filtered_selection or self.table_widget.value.empty:
-            return
-
-        # Find indices of filtered selected compounds in the current table
-        filtered_selection_indices = []
-        for i, compound in enumerate(self.table_widget.value["Compound"]):
-            if compound in filtered_selection:
-                filtered_selection_indices.append(i)
-
-        # Set the selection
-        if filtered_selection_indices:
-            self.table_widget.selection = filtered_selection_indices
 
     def _retest_selected(self, event):
         """Toggle retest status for selected compounds."""
@@ -271,7 +227,6 @@ class CompoundTable(param.Parameterized):
         """Handle table selection changes."""
         if not event.new:
             self.selected_compounds = []
-            self.full_selected_compounds = []
             return
 
         # Get selected compounds from current table view
@@ -279,21 +234,6 @@ class CompoundTable(param.Parameterized):
         self.selected_compounds = self.table_widget.value.loc[
             selected_indices, "Compound"
         ].values.tolist()
-
-        # Update full selection to include all selected compounds (including misses)
-        # This ensures we maintain the complete selection even when misses are hidden
-        if self.selected_compounds:
-            # Get the full context compounds to map back to full selection
-            full_context_compounds = self._get_full_context_compounds()
-            # Keep only the compounds that are in the current selection
-            self.full_selected_compounds = [
-                comp
-                for comp in full_context_compounds
-                if comp in self.selected_compounds
-                or comp in self.full_selected_compounds
-            ]
-        else:
-            self.full_selected_compounds = []
 
         # Notify app of selection change
         if hasattr(self.app, "_on_compound_selection_change"):
@@ -320,6 +260,12 @@ class CompoundTable(param.Parameterized):
     def clear_super_cluster_context(self):
         """Clear the current super cluster context."""
         self.current_super_cluster = None
+    
+    def clear_selection(self):
+        """Clear the table selection and reset selected compounds."""
+        self.selected_compounds = []
+        if hasattr(self, 'table_widget'):
+            self.table_widget.selection = []
 
     def _on_table_value_changed(self, event):
         """Handle table value changes when cells are edited in-place."""
