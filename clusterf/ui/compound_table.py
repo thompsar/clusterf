@@ -18,7 +18,7 @@ class CompoundTable(param.Parameterized):
         default=None, doc="Reference to main ClusterF application"
     )
     show_miss_compounds = param.Boolean(
-        default=True, doc="Whether to show 'Miss' compounds"
+        default=False, doc="Whether to show 'Miss' compounds"
     )
     selected_compounds = param.List(default=[], doc="Currently selected compounds")
     full_selected_compounds = param.List(
