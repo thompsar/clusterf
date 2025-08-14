@@ -38,16 +38,10 @@ class SuperClusterViewer(param.Parameterized):
         # Graph components
         self.G = None  # NetworkX graph
         self.pos = None  # Node positions
-        self.node_positions = None  # Array of node positions
-        self.node_labels = []  # List of node labels
-        self.edges_data = []  # Edge data for visualization
-        self.edges_array = None  # Array of edge coordinates
         self.cluster_color_map = {}  # Mapping of nodes to colors
         
         # HoloViews elements
-        self.points = None
-        self.labels = None
-        self.initial_edges = None
+        self.graph = None
         self.selection = None
         
         # Main plot pane
@@ -75,32 +69,21 @@ class SuperClusterViewer(param.Parameterized):
         # Generate positions for nodes using networkx
         self.pos = nx.spring_layout(self.G)
         
-        # Convert node positions and edges to lists of coordinates for HoloViews
-        self.node_positions = np.array([self.pos[n] for n in self.G.nodes()])
-        self.node_labels = list(self.G.nodes())
-        self.edges_data = [
-            (self.pos[edge[0]], self.pos[edge[1]]) for edge in self.G.edges()
-        ]
-        
         # Update colors based on current color dictionary
         self._update_node_colors()
         
-        # Extract x and y coordinates for edges
-        self.edges_array = np.array(
-            [(x1, y1, x2, y2) for ((x1, y1), (x2, y2)) in self.edges_data]
-        )
-        
-        # Create the visualization elements
-        self._create_visualization_elements()
+        # Create the visualization using hv.Graph.from_networkx
+        self._create_graph_visualization()
         
         # Initialize with all nodes selected
-        self.selection.update(index=list(range(len(self.node_labels))))
+        if self.selection:
+            self.selection.update(index=list(range(len(self.G.nodes()))))
         
     def _update_node_colors(self):
         """Update node colors based on current color dictionary and library data."""
         if not self.app or not hasattr(self.app, 'library') or not self.app.library:
             # Default colors if no library available
-            self.cluster_color_map = {node: "#999999" for node in self.node_labels}
+            self.cluster_color_map = {node: "#999999" for node in self.G.nodes()}
             return
             
         library = self.app.library
@@ -110,7 +93,7 @@ class SuperClusterViewer(param.Parameterized):
             self.color_dict = self.app.color_picker.color_dict.copy()
         
         if not hasattr(library, 'df') or "Cluster" not in library.df.columns:
-            self.cluster_color_map = {node: "#999999" for node in self.node_labels}
+            self.cluster_color_map = {node: "#999999" for node in self.G.nodes()}
             return
             
         try:
@@ -130,7 +113,7 @@ class SuperClusterViewer(param.Parameterized):
             
         except Exception as e:
             print(f"Error updating node colors: {e}")
-            self.cluster_color_map = {node: "#999999" for node in self.node_labels}
+            self.cluster_color_map = {node: "#999999" for node in self.G.nodes()}
     
     def _determine_cluster_color(self, category_counts):
         """Determine cluster color based on the category with the most compounds."""
@@ -145,46 +128,60 @@ class SuperClusterViewer(param.Parameterized):
         except (AttributeError, TypeError, ValueError):
             return "#999999" 
     
-    def _create_visualization_elements(self):
-        """Create the HoloViews visualization elements."""
-        # Get colors for nodes
-        cmap = [self.cluster_color_map.get(node, "#999999") for node in self.node_labels]
+    def _create_graph_visualization(self):
+        """Create the HoloViews graph visualization using hv.Graph.from_networkx."""
+        if not self.G:
+            return
+            
+        # Add color attributes to the graph nodes
+        for node in self.G.nodes():
+            self.G.nodes[node]['color'] = self.cluster_color_map.get(node, "#999999")
         
-        # Create data frame for points
-        data = pd.DataFrame({
-            "x": self.node_positions[:, 0],
-            "y": self.node_positions[:, 1],
-            "color": cmap,
-        })
-        
-        # Create HoloViews Points for the nodes
-        self.points = hv.Points(data, ["x", "y"]).opts(
-            size=self.point_size,
+        # Create the graph using HoloViews
+        self.graph = hv.Graph.from_networkx(self.G, self.pos).opts(
+            # Node styling
+            node_size=self.point_size,
+            node_color='color',
+            node_line_color='black',
+            node_line_width=0,
+            
+            # Edge styling
+            edge_line_width=0.5,
+            edge_line_color='gray',
+            edge_line_alpha=0.6,
+            
+            # General plot styling
+            width=self.plot_width,
+            height=self.plot_height,
             min_width=300,
             min_height=300,
             max_width=600,
             responsive=True,
             xaxis=None,
             yaxis=None,
-            color="color",
+            
+            # Tools
             tools=["tap", "box_select", "lasso_select"],
-            active_tools=["tap"],
+            active_tools=["tap"]
         )
         
-        # Create labels for nodes
+        # Add labels as a separate overlay
+        node_positions = np.array([self.pos[n] for n in self.G.nodes()])
+        node_labels = list(self.G.nodes())
         self.labels = hv.Labels(
-            {("x", "y"): self.node_positions, "text": self.node_labels},
+            {("x", "y"): node_positions, "text": node_labels},
             ["x", "y"],
-            "text",
-        ).opts(text_color="black", text_font_size="10pt")
-        
-        # Create HoloViews Segments for the edges
-        self.initial_edges = hv.Segments(self.edges_array).opts(
-            line_width=0.5, color="gray"
+            "text"
+        ).opts(
+            text_color="black", 
+            text_font_size="10pt"
         )
+        
+        # Combine graph and labels
+        self.graph = self.graph * self.labels
         
         # Set up selection stream
-        self.selection = Selection1D(source=self.points)
+        self.selection = Selection1D(source=self.graph)
         self.selection.param.watch(self._on_selection_change, "index")
         
         # Update the plot
@@ -195,7 +192,8 @@ class SuperClusterViewer(param.Parameterized):
         indices = self.selection.index if self.selection else []
         
         if indices:
-            self.selected_nodes = [self.node_labels[i] for i in indices]
+            node_list = list(self.G.nodes())
+            self.selected_nodes = [node_list[i] for i in indices]
             # Notify app of selection change
             if hasattr(self.app, '_on_cluster_selection_change'):
                 self.app._on_cluster_selection_change(self.selected_nodes)
@@ -210,83 +208,70 @@ class SuperClusterViewer(param.Parameterized):
     
     def _update_plot(self):
         """Update the graph plot with current selection state."""
-        if not self.points or not self.initial_edges or not self.labels:
+        if not self.graph:
             return
             
         if len(self.selected_nodes) > 0:
-            # Get selected and non-selected nodes
-            n_nodes = len(self.node_positions)
-            selected_indices = self.selection.index if self.selection else []
-            non_selected_indices = [
-                i for i in range(n_nodes) if i not in selected_indices
-            ]
-            
-            # Create separate point objects for selected and non-selected nodes
-            if selected_indices:
-                selected_data = self.points.data.loc[selected_indices]
-                selected_points = hv.Points(selected_data).opts(
-                    size=self.point_size * 2, 
-                    color="color", 
-                    line_color="black",
-                    line_width=2,
-                    responsive=True,
-                    xaxis=None,
-                    yaxis=None,
-                    tools=["tap", "box_select"],
-                    active_tools=["tap"],
-                )
-            else:
-                selected_points = hv.Points([]).opts(size=0)
-            
-            if non_selected_indices:
-                non_selected_data = self.points.data.loc[non_selected_indices]
-                non_selected_points = hv.Points(non_selected_data).opts(
-                    size=self.point_size, 
-                    color="color",
-                    alpha=0.6,
-                    xaxis=None,
-                    yaxis=None,
-                )
-            else:
-                non_selected_points = hv.Points([]).opts(size=0)
-            
-            # Get connected and non-connected edges
-            connected_edges = []
-            non_connected_edges = []
-            
-            for edge in self.G.edges():
-                if any(node in edge for node in self.selected_nodes):
-                    x1, y1 = self.pos[edge[0]]
-                    x2, y2 = self.pos[edge[1]]
-                    connected_edges.append((x1, y1, x2, y2))
+            # For selection styling, we'll recreate the graph with updated styling
+            # Add selection attributes to the graph nodes
+            for node in self.G.nodes():
+                if node in self.selected_nodes:
+                    self.G.nodes[node]['selected'] = True
+                    self.G.nodes[node]['size'] = self.point_size * 2
+                    self.G.nodes[node]['line_width'] = 2
                 else:
-                    x1, y1 = self.pos[edge[0]]
-                    x2, y2 = self.pos[edge[1]]
-                    non_connected_edges.append((x1, y1, x2, y2))
+                    self.G.nodes[node]['selected'] = False
+                    self.G.nodes[node]['size'] = self.point_size
+                    self.G.nodes[node]['line_width'] = 0
             
-            # Create edge segments
-            if connected_edges:
-                connected_segments = hv.Segments(connected_edges).opts(
-                    line_width=2, color="black"
-                )
-            else:
-                connected_segments = hv.Segments([]).opts(line_width=0)
+            # Update edge attributes based on selection
+            for edge in self.G.edges():
+                if edge[0] in self.selected_nodes or edge[1] in self.selected_nodes:
+                    self.G.edges[edge]['connected'] = True
+                    self.G.edges[edge]['line_width'] = 2
+                    self.G.edges[edge]['line_color'] = 'black'
+                    self.G.edges[edge]['alpha'] = 1.0
+                else:
+                    self.G.edges[edge]['connected'] = False
+                    self.G.edges[edge]['line_width'] = 1
+                    self.G.edges[edge]['line_color'] = 'gray'
+                    self.G.edges[edge]['alpha'] = 0.1
+            
+            # Create the styled graph
+            styled_graph = hv.Graph.from_networkx(self.G, self.pos).opts(
+                # Node styling
+                node_size=hv.dim('size'),
+                node_color='color',
+                node_line_color='black',
+                node_line_width=hv.dim('line_width'),
                 
-            if non_connected_edges:
-                faded_segments = hv.Segments(non_connected_edges).opts(
-                    line_width=1, color="gray", alpha=0.1
-                )
-            else:
-                faded_segments = hv.Segments([]).opts(line_width=0)
-            
-            # Combine all elements
-            self.plot.object = (
-                connected_segments * faded_segments * 
-                non_selected_points * selected_points * self.labels
+                # Edge styling
+                edge_line_width=hv.dim('line_width'),
+                edge_line_color=hv.dim('line_color'),
+                edge_line_alpha=hv.dim('alpha'),
+                
+                # General plot styling
+                width=self.plot_width,
+                height=self.plot_height,
+                min_width=300,
+                min_height=300,
+                max_width=600,
+                responsive=True,
+                xaxis=None,
+                yaxis=None,
+                
+                # Tools
+                tools=["tap", "box_select", "lasso_select"],
+                active_tools=["tap"]
             )
+            
+            # Add labels overlay
+            styled_graph = styled_graph * self.labels
+            
+            self.plot.object = styled_graph
         else:
             # No selection - show default view
-            self.plot.object = self.initial_edges * self.points * self.labels
+            self.plot.object = self.graph
     
     def update_colors(self, color_dict):
         """
@@ -297,9 +282,9 @@ class SuperClusterViewer(param.Parameterized):
         """
         self.color_dict = color_dict.copy()
         
-        if self.G and self.node_labels:
+        if self.G:
             self._update_node_colors()
-            self._create_visualization_elements()
+            self._create_graph_visualization()
     
     def set_selection(self, node_indices):
         """
