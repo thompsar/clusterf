@@ -66,7 +66,7 @@ class CompoundTable(param.Parameterized):
         """Create table control buttons."""
         # Toggle miss compounds button
         self.toggle_miss_button = pn.widgets.Button(
-            name="Hide Misses", button_type="light", width=120, height=28
+            name="Show Misses", button_type="light", width=120, height=28
         )
         self.toggle_miss_button.on_click(self._toggle_miss_compounds)
 
