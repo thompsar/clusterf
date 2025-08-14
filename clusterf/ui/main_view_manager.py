@@ -138,6 +138,10 @@ class MainViewManager(param.Parameterized):
         # This method will be called by the cluster viewer when nodes are selected
         # Here we can update other views based on the selection
 
+        # Clear table selection when context changes
+        if hasattr(self, "compound_table"):
+            self.compound_table.clear_selection()
+
         # Update compound table with selected clusters
         if selected_nodes:
             # Get compounds from selected clusters
@@ -186,21 +190,7 @@ class MainViewManager(param.Parameterized):
         if not self.app.library:
             return []
 
-        # Check if we have full selected compounds from table (includes misses)
-        if (
-            hasattr(self.compound_table, "full_selected_compounds")
-            and self.compound_table.full_selected_compounds
-        ):
-            return self.compound_table.full_selected_compounds
-
-        # Check if we have selected compounds from table (filtered)
-        if (
-            hasattr(self.compound_table, "selected_compounds")
-            and self.compound_table.selected_compounds
-        ):
-            return self.compound_table.selected_compounds
-
-        # Check if we have a current super cluster context
+        # Check if we have a current super cluster context (prioritize this over selections)
         if (
             hasattr(self.compound_table, "current_super_cluster")
             and self.compound_table.current_super_cluster is not None
@@ -210,6 +200,13 @@ class MainViewManager(param.Parameterized):
             return self.app.library.df[
                 self.app.library.df["SuperCluster"] == super_cluster
             ]["Compound"].tolist()
+
+        # Check if we have selected compounds from table (filtered)
+        if (
+            hasattr(self.compound_table, "selected_compounds")
+            and self.compound_table.selected_compounds
+        ):
+            return self.compound_table.selected_compounds
 
         # If no specific context, return all compounds
         return self.app.library.df["Compound"].tolist()
@@ -238,9 +235,8 @@ class MainViewManager(param.Parameterized):
                 return
 
             super_cluster_data = self.app.library.super_clusters[super_cluster_idx]
-            cluster_nodes = super_cluster_data[
-                2
-            ]  # [super_cluster_number, compound_count, cluster_nodes]
+            # Note: structure is[super_cluster_number, compound_count, cluster_nodes]
+            cluster_nodes = super_cluster_data[2]
 
             if not cluster_nodes:
                 return
@@ -265,6 +261,7 @@ class MainViewManager(param.Parameterized):
                 # Update other components with the new super cluster
                 self.category_histogram.update_histogram(super_cluster_number)
                 self.compound_table.update_table(super_cluster=super_cluster_number)
+                self.compound_table.clear_selection()  # Clear selection when super cluster changes
 
                 print(
                     f"Main view updated to super cluster {super_cluster_number} with {len(cluster_nodes)} member clusters"
