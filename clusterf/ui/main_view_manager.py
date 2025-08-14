@@ -263,10 +263,6 @@ class MainViewManager(param.Parameterized):
                 self.compound_table.update_table(super_cluster=super_cluster_number)
                 self.compound_table.clear_selection()  # Clear selection when super cluster changes
 
-                print(
-                    f"Main view updated to super cluster {super_cluster_number} with {len(cluster_nodes)} member clusters"
-                )
-
         except Exception as e:
             print(
                 f"Error updating main view for super cluster {super_cluster_number}: {e}"
