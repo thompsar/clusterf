@@ -117,7 +117,7 @@ class CategoryHistogram(param.Parameterized):
                 color="Color",
                 min_width=300,
                 min_height=300,
-                responsive=True,
+                responsive=False,
                 title=f"Category Distribution - Super Cluster {self.current_super_cluster}",
                 ylabel="Count",
                 xlabel="",
