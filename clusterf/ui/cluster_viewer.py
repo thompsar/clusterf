@@ -200,6 +200,7 @@ class SuperClusterViewer(param.Parameterized):
         """Handle changes in node selection."""
         indices = self.selection.index if self.selection else []
         print("A selection change has occurred")
+        print(indices)
         if indices:
             node_list = list(self.G.nodes())
             self.selected_nodes = [node_list[i] for i in indices]
@@ -207,10 +208,14 @@ class SuperClusterViewer(param.Parameterized):
             if hasattr(self.app, "_on_cluster_selection_change"):
                 self.app._on_cluster_selection_change(self.selected_nodes)
         else:
-            self.selected_nodes = []
+            # restore selection of all nodes
+            # BUG: Maybe? below self.app_on_cluster_selection_change is a little fragile,
+            # because prior to restoring selected nodes to all self.app_on_cluster_selection_change
+            # would populate the table with all compounds in the library, which is not what we want.
+            self.selected_nodes = list(self.G.nodes())
             # Clear selection in app
             if hasattr(self.app, "_on_cluster_selection_change"):
-                self.app._on_cluster_selection_change([])
+                self.app._on_cluster_selection_change(self.selected_nodes)
 
         # Update the styling without recreating the graph
         self._update_styling()
