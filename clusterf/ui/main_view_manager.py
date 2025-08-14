@@ -34,6 +34,9 @@ class MainViewManager(param.Parameterized):
         self.compound_data_chart = CompoundDataChart(app=app)
         self.compound_table = CompoundTable(app=app)
         
+        # Synchronize compound grid state with compound table
+        self._synchronize_miss_compounds_state()
+        
         # Main content layout - will be populated after clustering
         self.main_content = pn.Column(
             pn.pane.Markdown(
@@ -52,6 +55,11 @@ class MainViewManager(param.Parameterized):
         if hasattr(app, 'sc_builder'):
             # Monitor when clusters are built
             app.sc_builder.param.watch(self._on_clusters_built, 'clusters_built')
+    
+    def _synchronize_miss_compounds_state(self):
+        """Synchronize the compound grid's show_miss_compounds state with the compound table."""
+        if hasattr(self, 'compound_table') and hasattr(self, 'compound_grid'):
+            self.compound_grid.set_show_miss_compounds(self.compound_table.show_miss_compounds)
     
     def _on_clusters_built(self, event):
         """Handle when super clusters are built and update the main view."""
@@ -117,7 +125,6 @@ class MainViewManager(param.Parameterized):
         """Handle cluster selection changes from the cluster viewer."""
         # This method will be called by the cluster viewer when nodes are selected
         # Here we can update other views based on the selection
-        print(f"Cluster nodes selected: {selected_nodes}")
         
         # Update compound table with selected clusters
         if selected_nodes:
@@ -145,6 +152,51 @@ class MainViewManager(param.Parameterized):
         # Update compound grid and data chart with selected compounds
         self.compound_grid.update_compounds(selected_compounds)
         self.compound_data_chart.update_chart(selected_compounds)
+    
+    def _on_miss_compounds_toggle(self, show_miss_compounds):
+        """Handle miss compounds toggle changes from the compound table."""
+        # Synchronize compound grid state with compound table
+        self._synchronize_miss_compounds_state()
+        
+        # Get the full list of compounds from the current context
+        full_compounds = self._get_current_context_compounds()
+        
+        # Update the compound grid with the full list (it will apply filtering internally)
+        if full_compounds:
+            self.compound_grid.update_compounds(full_compounds)
+    
+    def _get_current_context_compounds(self):
+        """Get the full list of compounds from the current context (before any filtering)."""
+        if not self.app.library:
+            return []
+        
+        # Check if we have full selected compounds from table (includes misses)
+        if hasattr(self.compound_table, 'full_selected_compounds') and self.compound_table.full_selected_compounds:
+            return self.compound_table.full_selected_compounds
+        
+        # Check if we have selected compounds from table (filtered)
+        if hasattr(self.compound_table, 'selected_compounds') and self.compound_table.selected_compounds:
+            return self.compound_table.selected_compounds
+        
+        # Check if we have a current super cluster context
+        if hasattr(self.compound_table, 'current_super_cluster') and self.compound_table.current_super_cluster is not None:
+            super_cluster = self.compound_table.current_super_cluster
+            if "SuperCluster" in self.app.library.df.columns:
+                return self.app.library.df[
+                    self.app.library.df["SuperCluster"] == super_cluster
+                ]["Compound"].tolist()
+            else:
+                print('HEY DUMMY YOU NEED THIS THING IN main_view_manager.py')
+                # # Fallback to old method
+                # super_cluster_idx = super_cluster - 1
+                # if hasattr(self.app.library, 'super_clusters') and super_cluster_idx < len(self.app.library.super_clusters):
+                #     cluster_list = self.app.library.super_clusters[super_cluster_idx][2]
+                #     return self.app.library.df[
+                #         self.app.library.df["Cluster"].isin(cluster_list)
+                #     ]["Compound"].tolist()
+        
+        # If no specific context, return all compounds
+        return self.app.library.df["Compound"].tolist()
     
     def update_colors(self, color_dict):
         """Update colors across all visualizations."""

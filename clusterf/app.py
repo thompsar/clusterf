@@ -56,6 +56,13 @@ class ClusterFApp(param.Parameterized):
         # to notify the app of compound selection changes
         if hasattr(self.main_view, '_on_compound_selection_change'):
             self.main_view._on_compound_selection_change(selected_compounds)
+    
+    def _on_miss_compounds_toggle(self, show_miss_compounds):
+        """Handle miss compounds toggle changes from the compound table."""
+        # This method can be called by the compound table
+        # to notify the app of miss compounds toggle changes
+        if hasattr(self.main_view, '_on_miss_compounds_toggle'):
+            self.main_view._on_miss_compounds_toggle(show_miss_compounds)
 
     def serve(self):
         return pn.Row(

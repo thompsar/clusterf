@@ -16,6 +16,7 @@ class CompoundGrid(param.Parameterized):
     app: "ClusterFApp" = param.Parameter(default=None, doc="Reference to main ClusterF application")
     compounds = param.List(default=[], doc="List of compound IDs to display")
     color_dict = param.Dict(default={}, doc="Color mapping for compound categories")
+    show_miss_compounds = param.Boolean(default=True, doc="Whether to show 'Miss' compounds")
     
     def __init__(self, app: "ClusterFApp", **params):
         super().__init__(**params)
@@ -40,24 +41,22 @@ class CompoundGrid(param.Parameterized):
             self.common_substructure = None
             return
         
-        if not self.app.library:
-            return
-        
         try:
-            # Filter out non-numeric compound IDs (category names, etc.)
-            filtered_compound_ids = []
-            for item in compound_ids:
-                try:
-                    # Try to convert to int to ensure it's a valid compound ID
-                    compound_id = int(item)
-                    filtered_compound_ids.append(compound_id)
-                except (ValueError, TypeError):
-                    continue
             
-            if not filtered_compound_ids:
-                self.carousel.svgs = []
-                self.compounds = []
-                return
+            # Filter out "Miss" compounds if show_miss_compounds is False
+            if not self.show_miss_compounds:
+                # Get compound data to check categories
+                compound_data = self.app.library.get_compounds(compound_ids)
+                # Keep only non-Miss compounds
+                non_miss_mask = compound_data["Category"] != "Miss"
+                filtered_compound_ids = compound_data.loc[non_miss_mask, "Compound"].tolist()
+                
+                if not filtered_compound_ids:
+                    self.carousel.svgs = []
+                    self.compounds = []
+                    return
+            else:
+                filtered_compound_ids = compound_ids
             
             # Generate compound grid images
             # Determine grid parameters based on number of compounds
@@ -72,9 +71,14 @@ class CompoundGrid(param.Parameterized):
 
             # Generate the grid with current colors
             try:
-                # Ensure color_dict has all necessary categories
-                # Get the actual categories from the compounds
-                compound_data = self.app.library.get_compounds(filtered_compound_ids)
+                # Get compound data for categories and reuse if already fetched
+                if not self.show_miss_compounds and 'compound_data' in locals():
+                    # Reuse the compound data we already fetched for filtering
+                    pass
+                else:
+                    # Get the actual categories from the compounds
+                    compound_data = self.app.library.get_compounds(filtered_compound_ids)
+                
                 actual_categories = set(compound_data["Category"].unique())
                 
                 # Get the current color dictionary from the app's color picker
@@ -121,3 +125,15 @@ class CompoundGrid(param.Parameterized):
         # Re-render compounds with new colors if needed
         if self.compounds:
             self.update_compounds(self.compounds)
+    
+    def get_show_miss_compounds(self) -> bool:
+        """Get the current state of show_miss_compounds."""
+        return self.show_miss_compounds
+    
+    def set_show_miss_compounds(self, show_miss_compounds: bool):
+        """Set the show_miss_compounds state and update the grid if needed."""
+        if self.show_miss_compounds != show_miss_compounds:
+            self.show_miss_compounds = show_miss_compounds
+            # Update the grid with current compounds to apply the new filter
+            if self.compounds:
+                self.update_compounds(self.compounds)
