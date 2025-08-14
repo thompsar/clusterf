@@ -136,19 +136,27 @@ class SuperClusterViewer(param.Parameterized):
         # Add color attributes to the graph nodes
         for node in self.G.nodes():
             self.G.nodes[node]['color'] = self.cluster_color_map.get(node, "#999999")
+            self.G.nodes[node]['size'] = self.point_size
+            self.G.nodes[node]['line_width'] = 0
+        
+        # Add edge attributes
+        for edge in self.G.edges():
+            self.G.edges[edge]['line_width'] = 0.5
+            self.G.edges[edge]['line_color'] = 'gray'
+            self.G.edges[edge]['alpha'] = 0.6
         
         # Create the graph using HoloViews
         self.graph = hv.Graph.from_networkx(self.G, self.pos).opts(
             # Node styling
-            node_size=self.point_size,
+            node_size=hv.dim('size'),
             node_color='color',
             node_line_color='black',
-            node_line_width=0,
+            node_line_width=hv.dim('line_width'),
             
             # Edge styling
-            edge_line_width=0.5,
-            edge_line_color='gray',
-            edge_line_alpha=0.6,
+            edge_line_width=hv.dim('line_width'),
+            edge_line_color=hv.dim('line_color'),
+            edge_line_alpha=hv.dim('alpha'),
             
             # General plot styling
             width=self.plot_width,
@@ -185,12 +193,12 @@ class SuperClusterViewer(param.Parameterized):
         self.selection.param.watch(self._on_selection_change, "index")
         
         # Update the plot
-        self._update_plot()
+        self.plot.object = self.graph
     
     def _on_selection_change(self, event):
         """Handle changes in node selection."""
         indices = self.selection.index if self.selection else []
-        
+        print('A selection change has occurred')
         if indices:
             node_list = list(self.G.nodes())
             self.selected_nodes = [node_list[i] for i in indices]
@@ -203,75 +211,44 @@ class SuperClusterViewer(param.Parameterized):
             if hasattr(self.app, '_on_cluster_selection_change'):
                 self.app._on_cluster_selection_change([])
         
-        # Update the plot visualization
-        self._update_plot()
+        # Update the styling without recreating the graph
+        self._update_styling()
+    
+    def _update_styling(self):
+        """Update the graph styling based on current selection without recreating the graph."""
+        if not self.graph or not self.G:
+            return
+            
+        # Update node attributes for selection styling
+        for node in self.G.nodes():
+            if node in self.selected_nodes:
+                self.G.nodes[node]['size'] = self.point_size * 2
+                self.G.nodes[node]['line_width'] = 2
+            else:
+                self.G.nodes[node]['size'] = self.point_size
+                self.G.nodes[node]['line_width'] = 0
+        
+        # Update edge attributes for selection styling
+        for edge in self.G.edges():
+            if edge[0] in self.selected_nodes or edge[1] in self.selected_nodes:
+                self.G.edges[edge]['line_width'] = 2
+                self.G.edges[edge]['line_color'] = 'black'
+                self.G.edges[edge]['alpha'] = 1.0
+            else:
+                self.G.edges[edge]['line_width'] = 1
+                self.G.edges[edge]['line_color'] = 'gray'
+                self.G.edges[edge]['alpha'] = 0.1
+        
+        # Force a refresh by updating the plot object
+        self.plot.object = self.graph
     
     def _update_plot(self):
         """Update the graph plot with current selection state."""
         if not self.graph:
             return
             
-        if len(self.selected_nodes) > 0:
-            # For selection styling, we'll recreate the graph with updated styling
-            # Add selection attributes to the graph nodes
-            for node in self.G.nodes():
-                if node in self.selected_nodes:
-                    self.G.nodes[node]['selected'] = True
-                    self.G.nodes[node]['size'] = self.point_size * 2
-                    self.G.nodes[node]['line_width'] = 2
-                else:
-                    self.G.nodes[node]['selected'] = False
-                    self.G.nodes[node]['size'] = self.point_size
-                    self.G.nodes[node]['line_width'] = 0
-            
-            # Update edge attributes based on selection
-            for edge in self.G.edges():
-                if edge[0] in self.selected_nodes or edge[1] in self.selected_nodes:
-                    self.G.edges[edge]['connected'] = True
-                    self.G.edges[edge]['line_width'] = 2
-                    self.G.edges[edge]['line_color'] = 'black'
-                    self.G.edges[edge]['alpha'] = 1.0
-                else:
-                    self.G.edges[edge]['connected'] = False
-                    self.G.edges[edge]['line_width'] = 1
-                    self.G.edges[edge]['line_color'] = 'gray'
-                    self.G.edges[edge]['alpha'] = 0.1
-            
-            # Create the styled graph
-            styled_graph = hv.Graph.from_networkx(self.G, self.pos).opts(
-                # Node styling
-                node_size=hv.dim('size'),
-                node_color='color',
-                node_line_color='black',
-                node_line_width=hv.dim('line_width'),
-                
-                # Edge styling
-                edge_line_width=hv.dim('line_width'),
-                edge_line_color=hv.dim('line_color'),
-                edge_line_alpha=hv.dim('alpha'),
-                
-                # General plot styling
-                width=self.plot_width,
-                height=self.plot_height,
-                min_width=300,
-                min_height=300,
-                max_width=600,
-                responsive=True,
-                xaxis=None,
-                yaxis=None,
-                
-                # Tools
-                tools=["tap", "box_select", "lasso_select"],
-                active_tools=["tap"]
-            )
-            
-            # Add labels overlay
-            styled_graph = styled_graph * self.labels
-            
-            self.plot.object = styled_graph
-        else:
-            # No selection - show default view
-            self.plot.object = self.graph
+        # Use the styling update method
+        self._update_styling()
     
     def update_colors(self, color_dict):
         """
