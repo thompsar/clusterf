@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING
 import panel as pn
 import param
 import holoviews as hv
-import pandas as pd
 
 if TYPE_CHECKING:
     from clusterf.app import ClusterFApp
