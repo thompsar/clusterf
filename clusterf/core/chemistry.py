@@ -14,7 +14,7 @@ import os
 # will throw  AttributeError: 'str' object has no attribute 'data'
 # when img.data is called.
 # Its not sufficient to change img.data to img.
-from rdkit.Chem.Draw import IPythonConsole # noqa: F401
+from rdkit.Chem.Draw import IPythonConsole  # noqa: F401
 
 
 class ChemLibrary:
@@ -24,7 +24,13 @@ class ChemLibrary:
     Clustering information is stored in separate files
     """
 
-    def __init__(self, library_name, fine_threshold=0.2, method="RDKit", libraries_dir="data/libraries"):
+    def __init__(
+        self,
+        library_name,
+        fine_threshold=0.2,
+        method="RDKit",
+        libraries_dir="data/libraries",
+    ):
         self.library_name = library_name
         self.fine_threshold = fine_threshold
         self.method = method
@@ -41,23 +47,23 @@ class ChemLibrary:
         try:
             # Load the full library file
             full_library = pd.read_parquet(library_path)
-            
+
             # Convert Compound column to string
             full_library.Compound = full_library.Compound.astype(str)
-            
+
             # Separate platemap (all compounds including DMSO) from chemical data (compounds only)
-            self.platemap = full_library[['Plate','Col','Row','Compound']].copy()
-            
+            self.platemap = full_library[["Plate", "Col", "Row", "Compound"]].copy()
+
             # Create chemical data by filtering out DMSO and other non-compound entries
             # Keep only rows where Compound is not DMSO and has valid SMILES
-            self.df = full_library[
-                (full_library.Compound != "DMSO")
-            ].copy().reset_index(drop=True)
+            self.df = (
+                full_library[(full_library.Compound != "DMSO")]
+                .copy()
+                .reset_index(drop=True)
+            )
 
         except FileNotFoundError:
-            raise FileNotFoundError(
-                f"Library file not found: {library_path}"
-            )
+            raise FileNotFoundError(f"Library file not found: {library_path}")
 
     def load_clustering_info(self):
         """
@@ -65,32 +71,33 @@ class ChemLibrary:
         Expected format: {library_name}_clusters.parquet with columns: Compound, Cluster, Method, Threshold
         """
         # Determine clustering file path based on library name
-        clustering_path = os.path.join(self.libraries_dir, f"{self.library_name}_clusters.parquet")
-        
+        clustering_path = os.path.join(
+            self.libraries_dir, f"{self.library_name}_clusters.parquet"
+        )
+
         try:
             self.clustering_df = pd.read_parquet(clustering_path)
-            
+
             # Filter for the current method and threshold
             self.current_clustering = self.clustering_df[
-                (self.clustering_df.Method == self.method) & 
-                (self.clustering_df.Threshold == self.fine_threshold)
+                (self.clustering_df.Method == self.method)
+                & (self.clustering_df.Threshold == self.fine_threshold)
             ].copy()
-            
+
             # Add clustering info to chemical data (self.df)
             # Remove existing Cluster column if it exists
             if "Cluster" in self.df.columns:
                 self.df = self.df.drop(columns=["Cluster"])
-            
+
             # Merge clustering info into chemical data
             self.df = self.df.merge(
                 self.current_clustering[["Compound", "Cluster"]],
                 on="Compound",
-                how="left"
+                how="left",
             )
             # ensure that the cluster column is an integer
             self.df["Cluster"] = self.df["Cluster"].astype(int)
 
-            
         except FileNotFoundError:
             warnings.warn(f"Clustering file not found: {clustering_path}")
             self.clustering_df = None
@@ -106,33 +113,30 @@ class ChemLibrary:
             self.fine_threshold = fine_threshold
         if method is not None:
             self.method = method
-            
+
         # Reload clustering info with new parameters
         self.load_clustering_info()
 
     def get_available_clustering_parameters(self):
         """
         Get available clustering methods and thresholds from the clustering file
-        
+
         Returns
         -------
         dict: Dictionary with 'methods' and 'thresholds' keys containing lists of available values
         """
         if self.clustering_df is None:
             return {"methods": [], "thresholds": []}
-            
+
         methods = sorted(self.clustering_df.Method.unique().tolist())
         thresholds = sorted(self.clustering_df.Threshold.unique().tolist())
-        
-        return {
-            "methods": methods,
-            "thresholds": thresholds
-        }
+
+        return {"methods": methods, "thresholds": thresholds}
 
     def save_clustering_info(self, clustering_data, method, threshold):
         """
         Save clustering information to the clustering parquet file
-        
+
         Parameters
         ----------
         clustering_data : pd.DataFrame
@@ -143,39 +147,45 @@ class ChemLibrary:
             Clustering threshold used
         """
         # Determine clustering file path based on library name
-        clustering_path = os.path.join(self.libraries_dir, f"{self.library_name}_clusters.parquet")
-        
+        clustering_path = os.path.join(
+            self.libraries_dir, f"{self.library_name}_clusters.parquet"
+        )
+
         # Prepare new clustering data
         new_clustering = clustering_data.copy()
         new_clustering["Method"] = method
         new_clustering["Threshold"] = threshold
-        
+
         # Convert Compound column to string
         new_clustering.Compound = new_clustering.Compound.astype(str)
-        
+
         try:
             # Load existing clustering data if file exists
             if os.path.exists(clustering_path):
                 existing_clustering = pd.read_parquet(clustering_path)
                 existing_clustering.Compound = existing_clustering.Compound.astype(str)
-                
+
                 # Remove existing entries for this method and threshold
                 existing_clustering = existing_clustering[
-                    ~((existing_clustering.Method == method) & 
-                      (existing_clustering.Threshold == threshold))
+                    ~(
+                        (existing_clustering.Method == method)
+                        & (existing_clustering.Threshold == threshold)
+                    )
                 ]
-                
+
                 # Combine existing and new clustering data
-                combined_clustering = pd.concat([existing_clustering, new_clustering], ignore_index=True)
+                combined_clustering = pd.concat(
+                    [existing_clustering, new_clustering], ignore_index=True
+                )
             else:
                 combined_clustering = new_clustering
-            
+
             # Save to parquet file
             combined_clustering.to_parquet(clustering_path, index=False)
-            
+
             # Reload clustering info
             self.load_clustering_info()
-            
+
         except Exception as e:
             raise Exception(f"Failed to save clustering info: {str(e)}")
 
@@ -190,7 +200,7 @@ class ChemLibrary:
             self.dataset_df = pd.read_parquet(path)
         else:
             self.dataset_df = pd.read_csv(path, dtype={"Sub Categories": str})
-        
+
         # drop super cluster column if it exists
         # since dataset will have na for some values and dont want to deal with those for now.
         if "SuperCluster" in self.dataset_df.columns:
@@ -198,7 +208,7 @@ class ChemLibrary:
 
         # Convert Compound column to string
         self.dataset_df.Compound = self.dataset_df.Compound.astype(str)
-        
+
         if "Retest" not in self.dataset_df.columns:
             self.dataset_df["Retest"] = False
 
@@ -210,7 +220,7 @@ class ChemLibrary:
         subset_columns = ["Compound", "Category", "Retest"]
         existing_columns = [col for col in subset_columns if col in self.df.columns]
         new_columns = [col for col in subset_columns if col not in self.df.columns]
-        
+
         if new_columns:
             self.df = self.df.merge(
                 self.subset_df[["Compound"] + new_columns],
@@ -224,7 +234,7 @@ class ChemLibrary:
                     self.df[col] = self.df["Compound"].map(
                         self.subset_df.set_index("Compound")[col]
                     )
-        
+
         # Ensure no duplicate columns exist
         if self.df.columns.duplicated().any():
             # Keep only the first occurrence of each column
@@ -256,7 +266,7 @@ class ChemLibrary:
         for column in self.dataset_df.columns:
             if column in ["Cluster", "SuperCluster"]:
                 clustering_columns.append(column)
-                
+
         columns = ["Compound"] + clustering_columns + ["Category", "Retest"]
         # Create subset_df with unique compounds
         self.subset_df = (
@@ -270,19 +280,17 @@ class ChemLibrary:
 
         # Convert Compound column to string
         self.subset_df.Compound = self.subset_df.Compound.astype(str)
-        
+
         # Get clustering information from chemical data (self.df)
         if "Cluster" in self.df.columns:
             # Remove existing Cluster column if it exists
             if "Cluster" in self.subset_df.columns:
                 self.subset_df = self.subset_df.drop(columns=["Cluster"])
-            
+
             # Merge clustering info from chemical data into subset_df
             cluster_info = self.df[["Compound", "Cluster"]].copy()
             self.subset_df = self.subset_df.merge(
-                cluster_info,
-                on="Compound",
-                how="left"
+                cluster_info, on="Compound", how="left"
             )
         else:
             # Add empty Cluster column if no clustering data available
@@ -302,8 +310,8 @@ class ChemLibrary:
         fpgen = AllChem.GetRDKitFPGenerator()
         # use morgan fingerprints instead? Corresponds to ECFP4
         # fpgen = AllChem.GetMorganGenerator(radius=2,fpSize=2048)
-        #ECFP6 is radius=3
-        #fpgen = AllChem.GetMorganGenerator(radius=radius,fpSize=fpSize)
+        # ECFP6 is radius=3
+        # fpgen = AllChem.GetMorganGenerator(radius=radius,fpSize=fpSize)
         # fpgen = AllChem.GetMorganGenerator(radius=2,fpSize=2048,atomInvariantsGenerator=AllChem.GetMorganFeatureAtomInvGen())
 
         # fpgen = AllChem.GetTopologicalTorsionGenerator()
@@ -311,16 +319,15 @@ class ChemLibrary:
         # for more info on how fingerprinting might not capture two near identical looking molecules.
         # different type of fingerprint can be used. see singleton clusters 3950,6353 from CNS
         fps = [fpgen.GetFingerprint(mol) for mol in mols]
-        
-    
+
         clusters = ClusterFps(fps, coarse_thresh)
 
         # Create coarse clustering column name
         coarse_col = str(np.round(coarse_thresh, 2))
-        
+
         for idx, cluster in enumerate(clusters, start=1):
             self.subset_df.loc[cluster, coarse_col] = int(idx)
-            
+
         # Convert Compound column to string
         self.subset_df.Compound = self.subset_df.Compound.astype(str)
 
@@ -334,7 +341,9 @@ class ChemLibrary:
         # Precompute cluster to compound and compound to cluster mappings
         # Use chemical data (self.df) for fine clustering since it contains all compound cluster info
         df_with_clusters = self.df.dropna(subset=["Cluster"])
-        fine_clusters = df_with_clusters.groupby("Cluster").Compound.apply(list).to_dict()
+        fine_clusters = (
+            df_with_clusters.groupby("Cluster").Compound.apply(list).to_dict()
+        )
         fine_compounds = df_with_clusters.set_index("Compound")["Cluster"].to_dict()
         coarse_clusters = (
             self.subset_df.groupby(coarse_thresh).Compound.apply(list).to_dict()
@@ -407,9 +416,6 @@ class ChemLibrary:
             self.df.loc[self.df["Cluster"].isin(sub_clusters), "SuperCluster"] = (
                 super_clust_id
             )
-        print(
-            f"Total compounds in super clusters: {np.sum([comp for _, comp, __ in self.super_clusters])}"
-        )
 
     def extract_sub_categories(self):
         """
@@ -479,11 +485,11 @@ class ChemLibrary:
         """
         if not hasattr(self, "dataset_df"):
             return
-            
+
         # Get clustering information from chemical data (self.df) and Retest from subset_df
         cluster_info = self.df[["Compound", "Cluster", "SuperCluster"]].copy()
         retest_info = self.subset_df[["Compound", "Retest"]].copy()
-        
+
         # Merge retest info into cluster info
         cluster_info = cluster_info.merge(retest_info, on="Compound", how="left")
 
@@ -506,7 +512,7 @@ class ChemLibrary:
             cluster_info,
             on="Compound",
             how="left",
-        )       
+        )
 
     def compute_saturation_metrics(self):
         """
@@ -530,7 +536,7 @@ class ChemLibrary:
         df_main = self.df[["Compound", "Cluster"]].copy()
         if has_super:
             df_main["SuperCluster"] = self.df["SuperCluster"]
-        
+
         # Add category information from subset_df
         category_info = self.subset_df[["Compound", "Category"]].copy()
         df_main = df_main.merge(category_info, on="Compound", how="left")
@@ -545,10 +551,13 @@ class ChemLibrary:
             non_miss = (group["Category"] != "Miss").sum()
             return float(non_miss) / float(total)
 
-
         # Super cluster saturation (SCS)
         if has_super:
-            scs_series = df_main.dropna(subset=["SuperCluster"]).groupby("SuperCluster").apply(_saturation)
+            scs_series = (
+                df_main.dropna(subset=["SuperCluster"])
+                .groupby("SuperCluster")
+                .apply(_saturation)
+            )
             scs_map = scs_series.to_dict()
         else:
             scs_map = {}
@@ -565,7 +574,6 @@ class ChemLibrary:
 
         # Merge into subset_df per compound
         self.subset_df = self.subset_df.merge(df_metrics, on="Compound", how="left")
-
 
     def build_subgraph(self, member_cluster):
         """
