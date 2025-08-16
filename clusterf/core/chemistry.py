@@ -1,13 +1,15 @@
+import os
 import warnings
 import pandas as pd
 import numpy as np
 import networkx as nx
+from scipy.sparse import coo_matrix
 import holoviews as hv
 from holoviews import opts
 from rdkit import Chem
 from rdkit.Chem import MolFromSmiles, AllChem, Draw
 from rdkit.Chem import rdFMCS
-import os
+
 
 # Below needed for some reason to get the draw functions to work
 # even though it is not called. If not imported, draw_compound
@@ -82,7 +84,7 @@ class ChemLibrary:
             self.current_clustering = self.clustering_df[
                 (self.clustering_df.Method == self.method)
                 & (self.clustering_df.Threshold == self.fine_threshold)
-            ].copy()
+            ]
 
             # Add clustering info to chemical data (self.df)
             # Remove existing Cluster column if it exists
@@ -199,15 +201,17 @@ class ChemLibrary:
         if path.lower().endswith(".parquet"):
             self.dataset_df = pd.read_parquet(path)
         else:
-            self.dataset_df = pd.read_csv(path, dtype={"Sub Categories": str})
+            self.dataset_df = pd.read_csv(
+                path, dtype={"Compound": str, "Sub Categories": str}
+            )
 
         # drop super cluster column if it exists
         # since dataset will have na for some values and dont want to deal with those for now.
         if "SuperCluster" in self.dataset_df.columns:
             self.dataset_df = self.dataset_df.drop(columns=["SuperCluster"])
 
-        # Convert Compound column to string
-        self.dataset_df.Compound = self.dataset_df.Compound.astype(str)
+        # # Convert Compound column to string
+        # self.dataset_df.Compound = self.dataset_df.Compound.astype(str)
 
         if "Retest" not in self.dataset_df.columns:
             self.dataset_df["Retest"] = False
@@ -288,7 +292,9 @@ class ChemLibrary:
                 self.subset_df = self.subset_df.drop(columns=["Cluster"])
 
             # Merge clustering info from chemical data into subset_df
-            cluster_info = self.df[["Compound", "Cluster"]].copy()
+            # cluster_info = self.df[["Compound", "Cluster"]].copy()
+            # copy not needed
+            cluster_info = self.df[["Compound", "Cluster"]]
             self.subset_df = self.subset_df.merge(
                 cluster_info, on="Compound", how="left"
             )
@@ -333,70 +339,69 @@ class ChemLibrary:
 
     def build_graph(self, coarse_thresh):
         """
-        Builds graph of subclusters using Cluster column (fine clustering)
+        Build a graph connecting fine clusters that co-occur in at least one
+        coarse cluster (defined on the smaller subset of compounds).
+
+        Speed notes:
+        - Single merge to align fine/coarse on the subset of compounds.
+        - Sparse incidence B (fine x coarse), then A = B @ B.T (boolean).
+        - No Python loops over clusters or compounds.
         """
-        # convert coarse_thresh to string if not already
-        coarse_thresh = str(coarse_thresh)
+        coarse_col = str(coarse_thresh)
 
-        # Precompute cluster to compound and compound to cluster mappings
-        # Use chemical data (self.df) for fine clustering since it contains all compound cluster info
-        df_with_clusters = self.df.dropna(subset=["Cluster"])
-        fine_clusters = (
-            df_with_clusters.groupby("Cluster").Compound.apply(list).to_dict()
-        )
-        fine_compounds = df_with_clusters.set_index("Compound")["Cluster"].to_dict()
-        coarse_clusters = (
-            self.subset_df.groupby(coarse_thresh).Compound.apply(list).to_dict()
-        )
-        coarse_compounds = self.subset_df.set_index("Compound")[coarse_thresh].to_dict()
+        # 1) Fine clusters for all compounds (df is larger; each compound appears once)
+        df_fine = self.df.loc[self.df["Cluster"].notna(), ["Compound", "Cluster"]]
 
-        # Initialize edge array
-        dims = len(fine_clusters)
-        edge_array = np.zeros((dims + 1, dims + 1))
-
-        # Build edge array
-        for cluster, comps in fine_clusters.items():
-            coarse_mapping = set(
-                [coarse_compounds[comp] for comp in comps if comp in coarse_compounds]
-            )
-            if len(coarse_mapping) > 0:
-                compound_mapping = set(
-                    [
-                        comp
-                        for coarse_clust in coarse_mapping
-                        for comp in coarse_clusters[coarse_clust]
-                    ]
-                )
-                related_clusters = list(
-                    set([fine_compounds[comp] for comp in compound_mapping])
-                )
-                edge_array[cluster, related_clusters] = 1
-        # find rows that only have 1 element
-        self.singletons = np.where(edge_array.sum(axis=1) == 1)[0]
-        # set diagonal to 0
-        np.fill_diagonal(edge_array, 0)
-        # add back singleton nodes to edge_array
-        edge_array[self.singletons, self.singletons] = 1
-        self.graph = nx.from_numpy_array(edge_array)
-        # drop 0 node from graph
-        self.graph.remove_node(0)
-
-        # Get superclusters
-        # subgraph are sets, convert to list
-        super_cluster_groups = [
-            list(subgraph)
-            for subgraph in nx.connected_components(self.graph)
-            if len(subgraph) > 1
+        # 2) Coarse clusters for subset only (each compound appears once)
+        df_coarse = self.subset_df.loc[
+            self.subset_df[coarse_col].notna(), ["Compound", coarse_col]
         ]
 
-        # add singletons to super_cluster_groups
-        super_cluster_groups.extend([[node] for node in self.singletons])
+        # 3) Restrict to compounds present in the coarse subset
+        #    (this also guarantees we only relate via the coarse partition on the subset)
+        df_fc = df_fine.merge(df_coarse, on="Compound", how="inner")
+        if df_fc.empty:
+            # No overlap => empty graph
+            self.graph = nx.Graph()
+            return
+
+        # 4) Factorize to get compact integer ids (fast & memory friendly)
+        fine_codes, fine_uniques = pd.factorize(df_fc["Cluster"], sort=True)
+        coarse_codes, coarse_uniques = pd.factorize(df_fc[coarse_col], sort=True)
+
+        n_fine = len(fine_uniques)
+        n_coarse = len(coarse_uniques)
+
+        # 5) Build a boolean incidence matrix B (fine x coarse), 1 if any compound maps (F,C)
+        # Using duplicates is fine; coo_matrix will sum them; we then binarize.
+        data = np.ones(len(df_fc), dtype=np.uint8)
+        B = coo_matrix(
+            (data, (fine_codes, coarse_codes)), shape=(n_fine, n_coarse)
+        ).tocsr()
+        B.data[:] = 1  # binarize in case of multiples
+
+        # 6) Fine–fine adjacency via sparse boolean multiplication
+        # A[i,j] > 0 if fine cluster i shares any coarse cluster with j
+        A = B @ B.T
+        A.setdiag(0)  # remove self-loops
+        A.eliminate_zeros()
+
+        # 7) Build the graph (nodes are 0..n_fine-1 for now)
+        # Note networkx includes singletons by default
+        G = nx.from_scipy_sparse_array(A)  # undirected graph
+
+        # 8) Relabel nodes to original fine cluster labels for external consistency
+        mapping = {i: int(fine_uniques[i]) for i in range(n_fine)}
+        G = nx.relabel_nodes(G, mapping)
+
+        # Store results
+        self.graph = G
 
         super_cluster_counts = []
-        for subgraph in super_cluster_groups:
+        for subgraph in nx.connected_components(G):
             mask = self.df["Cluster"].isin(subgraph)
             compound_count = len(self.df[mask]["Compound"])
-            super_cluster_counts.append([compound_count, subgraph])
+            super_cluster_counts.append([compound_count, list(subgraph)])
 
         # sort super_cluster_counts by compound count
         super_cluster_counts.sort(key=lambda x: x[0], reverse=True)
@@ -412,7 +417,10 @@ class ChemLibrary:
         # Initialize super cluster column with NaN in chemical data
         self.df["SuperCluster"] = np.nan
         # Map each cluster to its super cluster number (1-indexed)
-        for super_clust_id, compound_count, sub_clusters in self.super_clusters:
+        # Note: would it be beneficial to store compound count for later saturation calculations?
+        for super_clust_id, (compound_count, sub_clusters) in enumerate(
+            super_cluster_counts, start=1
+        ):
             self.df.loc[self.df["Cluster"].isin(sub_clusters), "SuperCluster"] = (
                 super_clust_id
             )
@@ -579,12 +587,9 @@ class ChemLibrary:
         """
         Builds subgraph of related clusters
         """
-
-        for sub_graph in nx.connected_components(self.graph):
-            if member_cluster in sub_graph:
-                self.sub_graph = self.graph.subgraph(sub_graph).copy()
-                break
-        self.node_pos = nx.spring_layout(self.sub_graph, iterations=100)
+        nodes = nx.node_connected_component(self.graph, member_cluster)
+        self.sub_graph = self.graph.subgraph(nodes)
+        self.node_pos = nx.spring_layout(self.sub_graph, iterations=50)
 
     def draw_subgraph(self, member_cluster):
         """
