@@ -137,6 +137,38 @@ class SuperClusterViewer(param.Parameterized):
 
         except (AttributeError, TypeError, ValueError):
             return "#999999"
+    
+    def _get_graph_options(self, has_edges=True):
+        """Get graph styling options based on whether the graph has edges."""
+        base_options = {
+            # Node styling
+            "node_size": hv.dim("size"),
+            "node_color": "color",
+            "node_line_color": "black", 
+            "node_line_width": hv.dim("line_width"),
+            # General plot styling
+            "width": self.plot_width,
+            "height": self.plot_height,
+            "min_width": 300,
+            "min_height": 300,
+            "max_width": 600,
+            "responsive": False,
+            "xaxis": None,
+            "yaxis": None,
+            "tools": ["tap", "box_select", "lasso_select"],
+            "active_tools": ["tap"],
+        }
+        
+        if has_edges:
+            # Add edge styling only when edges exist
+            edge_options = {
+                "edge_line_width": hv.dim("line_width"),
+                "edge_line_color": hv.dim("line_color"), 
+                "edge_line_alpha": hv.dim("alpha"),
+            }
+            base_options.update(edge_options)
+    
+        return base_options
 
     def _create_graph_visualization(self):
         """Create the HoloViews graph visualization using hv.Graph.from_networkx."""
@@ -149,37 +181,19 @@ class SuperClusterViewer(param.Parameterized):
             self.G.nodes[node]["size"] = self.point_size
             self.G.nodes[node]["line_width"] = 0
 
-        # Add edge attributes
-        for edge in self.G.edges():
-            self.G.edges[edge]["line_width"] = 0.5
-            self.G.edges[edge]["line_color"] = "gray"
-            self.G.edges[edge]["alpha"] = 0.6
+        has_edges = len(self.G.edges()) > 0
+        if has_edges:
+            # Add edge attributes
+            for edge in self.G.edges():
+                self.G.edges[edge]["line_width"] = 0.5
+                self.G.edges[edge]["line_color"] = "gray"
+                self.G.edges[edge]["alpha"] = 0.6
 
-        # Create the graph using HoloViews
-        self.graph = hv.Graph.from_networkx(self.G, self.pos).opts(
-            # Node styling
-            node_size=hv.dim("size"),
-            node_color="color",
-            node_line_color="black",
-            node_line_width=hv.dim("line_width"),
-            # Edge styling
-            edge_line_width=hv.dim("line_width"),
-            edge_line_color=hv.dim("line_color"),
-            edge_line_alpha=hv.dim("alpha"),
-            # General plot styling
-            width=self.plot_width,
-            height=self.plot_height,
-            min_width=300,
-            min_height=300,
-            max_width=600,
-            responsive=False,
-            xaxis=None,
-            yaxis=None,
-            # Tools
-            tools=["tap", "box_select", "lasso_select"],
-            active_tools=["tap"],
-        )
-
+        
+        # Create the graph with appropriate styling
+        graph_options = self._get_graph_options(has_edges)
+        self.graph = hv.Graph.from_networkx(self.G, self.pos).opts(**graph_options)
+        
         # Add labels as a separate overlay
         node_positions = np.array([self.pos[n] for n in self.G.nodes()])
         node_labels = list(self.G.nodes())
