@@ -162,7 +162,7 @@ class SuperClusterBuilder(param.Parameterized):
         if getattr(self.app, "library", None):
             try:
                 self.app.library.cluster_subset_df(self.coarse_threshold)
-                self.app.library.build_graph(self.coarse_threshold)
+                self.app.library.build_graph()
 
                 # Collapse the cluster builder card after successful clustering
                 self.controls.collapsed = True

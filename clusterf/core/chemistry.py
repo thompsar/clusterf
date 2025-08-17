@@ -282,9 +282,6 @@ class ChemLibrary:
             self.subset_df["Retest"].astype("boolean").fillna(False)
         )
 
-        # Convert Compound column to string
-        self.subset_df.Compound = self.subset_df.Compound.astype(str)
-
         # Get clustering information from chemical data (self.df)
         if "Cluster" in self.df.columns:
             # Remove existing Cluster column if it exists
@@ -328,16 +325,10 @@ class ChemLibrary:
 
         clusters = ClusterFps(fps, coarse_thresh)
 
-        # Create coarse clustering column name
-        coarse_col = str(np.round(coarse_thresh, 2))
-
         for idx, cluster in enumerate(clusters, start=1):
-            self.subset_df.loc[cluster, coarse_col] = int(idx)
+            self.subset_df.loc[cluster, "CoarseCluster"] = int(idx)
 
-        # Convert Compound column to string
-        self.subset_df.Compound = self.subset_df.Compound.astype(str)
-
-    def build_graph(self, coarse_thresh):
+    def build_graph(self):
         """
         Build a graph connecting fine clusters that co-occur in at least one
         coarse cluster (defined on the smaller subset of compounds).
@@ -347,7 +338,6 @@ class ChemLibrary:
         - Sparse incidence B (fine x coarse), then A = B @ B.T (boolean).
         - No Python loops over clusters or compounds.
         """
-        coarse_col = str(coarse_thresh)
 
         # 1) Fine clusters for all compounds (df is larger; each compound appears once)
         # BUG: potential future bug by removing the notna filtering
@@ -355,7 +345,7 @@ class ChemLibrary:
         df_fine = self.df[["Compound", "Cluster"]]
 
         # 2) Coarse clusters for subset only (each compound appears once)
-        df_coarse = self.subset_df[["Compound", coarse_col]]
+        df_coarse = self.subset_df[["Compound", "CoarseCluster"]]
 
         # 3) Restrict to compounds present in the coarse subset
         #    (this also guarantees we only relate via the coarse partition on the subset)
@@ -367,7 +357,7 @@ class ChemLibrary:
 
         # 4) Factorize to get compact integer ids (fast & memory friendly)
         fine_codes, fine_uniques = pd.factorize(df_fc["Cluster"], sort=True)
-        coarse_codes, coarse_uniques = pd.factorize(df_fc[coarse_col], sort=True)
+        coarse_codes, coarse_uniques = pd.factorize(df_fc["CoarseCluster"], sort=True)
 
         n_fine = len(fine_uniques)
         n_coarse = len(coarse_uniques)
@@ -486,7 +476,7 @@ class ChemLibrary:
 
         return subcategory_columns
 
-    def update_dataset_with_clustering(self, coarse_thresh):
+    def update_dataset_with_clustering(self):
         """
         Update dataset_df with clustering information and current Retest values.
         This should be called after clustering is complete.
@@ -507,8 +497,8 @@ class ChemLibrary:
             columns_to_drop.append("Cluster")
         if "SuperCluster" in self.dataset_df.columns:
             columns_to_drop.append("SuperCluster")
-        if str(coarse_thresh) in self.dataset_df.columns:
-            columns_to_drop.append(str(coarse_thresh))
+        if "CoarseCluster" in self.dataset_df.columns:
+            columns_to_drop.append("CoarseCluster")
         if "Retest" in self.dataset_df.columns:
             columns_to_drop.append("Retest")
 
