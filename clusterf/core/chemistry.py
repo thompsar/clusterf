@@ -350,12 +350,12 @@ class ChemLibrary:
         coarse_col = str(coarse_thresh)
 
         # 1) Fine clusters for all compounds (df is larger; each compound appears once)
-        df_fine = self.df.loc[self.df["Cluster"].notna(), ["Compound", "Cluster"]]
+        # BUG: potential future bug by removing the notna filtering
+        # df_fine = self.df.loc[self.df["Cluster"].notna(), ["Compound", "Cluster"]]
+        df_fine = self.df[["Compound", "Cluster"]]
 
         # 2) Coarse clusters for subset only (each compound appears once)
-        df_coarse = self.subset_df.loc[
-            self.subset_df[coarse_col].notna(), ["Compound", coarse_col]
-        ]
+        df_coarse = self.subset_df[["Compound", coarse_col]]
 
         # 3) Restrict to compounds present in the coarse subset
         #    (this also guarantees we only relate via the coarse partition on the subset)
