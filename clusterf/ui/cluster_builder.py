@@ -142,6 +142,11 @@ class SuperClusterBuilder(param.Parameterized):
 
             # Expand the cluster builder card when dataset changes
             self.controls.collapsed = False
+            
+            # Notify the app that a dataset has been loaded
+            if hasattr(self.app, '_on_dataset_loaded'):
+                self.app._on_dataset_loaded()
+            
             # print(self.app.library.dataset_df.head())
 
     @param.depends("method", "fine_threshold", "coarse_threshold", watch=True)

@@ -219,6 +219,35 @@ class MainViewManager(param.Parameterized):
             self.category_histogram.update_colors(color_dict)
             self.compound_data_chart.update_colors(color_dict)
 
+    def _on_dataset_changed(self):
+        """Handle dataset changes by refreshing components that depend on dataset categories."""
+        
+        # Reset any clustering state since dataset changed
+        self.clusters_built = False
+        
+        # Immediately clear all component panes to prevent showing old data
+        if hasattr(self, "category_histogram"):
+            
+            self.category_histogram.histogram_pane.object = None
+        if hasattr(self, "compound_grid"):
+            
+            self.compound_grid.carousel.svgs = []
+            self.compound_grid.compounds = []
+        if hasattr(self, "compound_data_chart"):
+            
+            self.compound_data_chart.chart_pane.object = None
+        if hasattr(self, "cluster_viewer"):
+            
+            self.cluster_viewer.plot.object = None
+        if hasattr(self, "compound_table"):
+            
+            self.compound_table.clear_selection()
+            self.compound_table.clear_super_cluster_context()
+        
+        # Now reset the main view to show the welcome message
+        self._reset_main_view()
+        
+
     def update_cluster_view(self, super_cluster_number):
         """Update the cluster view with a specific super cluster."""
         if (
