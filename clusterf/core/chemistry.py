@@ -209,6 +209,11 @@ class ChemLibrary:
         # since dataset will have na for some values and dont want to deal with those for now.
         if "SuperCluster" in self.dataset_df.columns:
             self.dataset_df = self.dataset_df.drop(columns=["SuperCluster"])
+        # clear these out, as the user may have changed the dataset and we dont want to use the old values
+        if "Category" in self.df.columns:
+            self.df = self.df.drop(columns=["Category"])
+        if "Retest" in self.df.columns:
+            self.df = self.df.drop(columns=["Retest"])
 
         # # Convert Compound column to string
         # self.dataset_df.Compound = self.dataset_df.Compound.astype(str)
@@ -223,9 +228,9 @@ class ChemLibrary:
         # Only merge columns that don't already exist in the main df
         subset_columns = ["Compound", "Category", "Retest"]
 
+        # TODO: revist the if else below, may not be needed in full extent, just unable to debug zzzz
         existing_columns = [col for col in subset_columns if col in self.df.columns]
         new_columns = [col for col in subset_columns if col not in self.df.columns]
-
         if new_columns:
             self.df = self.df.merge(
                 self.subset_df[["Compound"] + new_columns],

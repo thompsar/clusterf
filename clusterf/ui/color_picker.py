@@ -70,7 +70,7 @@ class CategoryColorPicker(param.Parameterized):
             title="Category Colors",
             collapsed=True,
             visible=False,
-            width=220
+            width=220,
         )
 
         # If the app has a dataset already loaded, build immediately
@@ -112,6 +112,10 @@ class CategoryColorPicker(param.Parameterized):
             self.color_dict = {}
             return
 
+        # Clear old color widgets and color dict before rebuilding
+        self._color_widgets.clear()
+        self.color_dict = {}
+
         # Build widgets (reuse existing colors where possible)
         widgets: List[pn.widgets.ColorPicker] = []
         new_color_dict: Dict[str, str] = {}
@@ -138,13 +142,13 @@ class CategoryColorPicker(param.Parameterized):
         # Update card
         self.controls.objects = [body]
         self.controls.visible = True
-        
+
         # Trigger a color change event to notify other components of the new color dictionary
         # This ensures components like the category histogram get updated colors immediately
-        self.param.trigger('color_dict')
-        
+        self.param.trigger("color_dict")
+
         # Also notify the app that the color picker has finished rebuilding
-        if hasattr(self.app, '_on_color_picker_rebuilt'):
+        if hasattr(self.app, "_on_color_picker_rebuilt"):
             self.app._on_color_picker_rebuilt()
 
     def _on_color_change(self, _):
