@@ -222,6 +222,7 @@ class ChemLibrary:
         # Merge categories into main library df
         # Only merge columns that don't already exist in the main df
         subset_columns = ["Compound", "Category", "Retest"]
+
         existing_columns = [col for col in subset_columns if col in self.df.columns]
         new_columns = [col for col in subset_columns if col not in self.df.columns]
 
@@ -235,14 +236,21 @@ class ChemLibrary:
             # If no new columns, just update existing ones
             for col in existing_columns:
                 if col in self.subset_df.columns:
-                    self.df[col] = self.df["Compound"].map(
-                        self.subset_df.set_index("Compound")[col]
-                    )
+                    try:
+                        self.df[col] = self.df["Compound"].map(
+                            self.subset_df.set_index("Compound")[col]
+                        )
+                    except KeyError as e:
+                        print(f"Error updating column {col}: {e}")
+                        print(f"subset_df columns: {list(self.subset_df.columns)}")
+                        print(f"subset_df shape: {self.subset_df.shape}")
+                        continue
 
         # Ensure no duplicate columns exist
         if self.df.columns.duplicated().any():
             # Keep only the first occurrence of each column
             self.df = self.df.loc[:, ~self.df.columns.duplicated()]
+
         self.df["Category"] = self.df["Category"].fillna("Miss")
         # Note below, converting to 'boolean' and not 'bool' was necessary to
         # avoid FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and
@@ -272,12 +280,14 @@ class ChemLibrary:
                 clustering_columns.append(column)
 
         columns = ["Compound"] + clustering_columns + ["Category", "Retest"]
+
         # Create subset_df with unique compounds
         self.subset_df = (
             self.dataset_df[self.dataset_df.Category != "Miss"][columns]
             .drop_duplicates(subset="Compound")
             .reset_index(drop=True)
         )
+
         self.subset_df["Retest"] = (
             self.subset_df["Retest"].astype("boolean").fillna(False)
         )

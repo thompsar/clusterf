@@ -76,15 +76,10 @@ class CategoryColorPicker(param.Parameterized):
         # If the app has a dataset already loaded, build immediately
         self._maybe_build()
 
-        # Rebuild when dataset selection changes (pattern: observe sc_builder param)
-        # Only attach if the app exposes sc_builder with a dataset_select parameter
-        sc_builder = getattr(self.app, "sc_builder", None)
-        if (
-            sc_builder is not None
-            and hasattr(sc_builder, "param")
-            and hasattr(sc_builder.param, "dataset_select")
-        ):
-            sc_builder.param.watch(self._on_dataset_changed, "dataset_select")
+        # Rebuild when dataset selection changes (pattern: observe app dataset_loaded param)
+        # This ensures the color picker rebuilds when a dataset is actually loaded
+        if hasattr(self.app, "param") and hasattr(self.app.param, "dataset_loaded"):
+            self.app.param.watch(self._on_dataset_changed, "dataset_loaded")
 
     def get_colors(self) -> Dict[str, str]:
         """Return the current category→color mapping."""
@@ -143,6 +138,14 @@ class CategoryColorPicker(param.Parameterized):
         # Update card
         self.controls.objects = [body]
         self.controls.visible = True
+        
+        # Trigger a color change event to notify other components of the new color dictionary
+        # This ensures components like the category histogram get updated colors immediately
+        self.param.trigger('color_dict')
+        
+        # Also notify the app that the color picker has finished rebuilding
+        if hasattr(self.app, '_on_color_picker_rebuilt'):
+            self.app._on_color_picker_rebuilt()
 
     def _on_color_change(self, _):
         # Sync dict from widget values

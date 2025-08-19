@@ -142,6 +142,20 @@ class CategoryHistogram(param.Parameterized):
         
     def refresh_histogram(self):
         """Force refresh the histogram with current data and colors."""
+        # Get updated colors from the app's color picker if available
+        if hasattr(self.app, 'color_picker') and self.app.color_picker.color_dict:
+            self.color_dict = self.app.color_picker.color_dict.copy()
+        else:
+            # Clear old color dict if no new colors available
+            self.color_dict = {}
+        
+        # If no categories available, show appropriate message
+        if not self.color_dict:
+            self.histogram_pane.object = hv.Text(0.5, 0.5, "Load a dataset to see category distribution.").opts(
+                width=600, height=250, xaxis=None, yaxis=None
+            )
+            return
+        
         self.update_histogram()
     
     def _get_current_super_cluster_compounds(self):

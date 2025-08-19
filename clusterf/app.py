@@ -16,6 +16,9 @@ class ClusterFApp(param.Parameterized):
     library: ChemLibrary | None = None
     LIBRARIES_DIR = os.path.join("data", "libraries")
     DATASETS_DIR = os.path.join("data", "datasets")
+    
+    # Add a parameter to track dataset changes
+    dataset_loaded = param.Boolean(default=False, doc="Whether a dataset has been loaded")
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -63,6 +66,34 @@ class ClusterFApp(param.Parameterized):
         # to notify the app of miss compounds toggle changes
         if hasattr(self.main_view, '_on_miss_compounds_toggle'):
             self.main_view._on_miss_compounds_toggle(show_miss_compounds)
+
+    def _on_dataset_loaded(self):
+        """Handle dataset loading completion."""
+        # Toggle the dataset_loaded parameter to trigger watchers
+        self.dataset_loaded = not self.dataset_loaded
+        
+        # Notify main view of dataset change (if main view exists)
+        if hasattr(self, 'main_view') and hasattr(self.main_view, '_on_dataset_changed'):
+            self.main_view._on_dataset_changed()
+
+    def _on_color_picker_rebuilt(self):
+        """Handle color picker rebuild completion."""
+        # Now that the color picker has finished rebuilding, update all components
+        if hasattr(self, 'main_view'):
+            # Update all components with the new colors
+            if hasattr(self.main_view, 'category_histogram'):
+                
+                self.main_view.category_histogram.refresh_histogram()
+            if hasattr(self.main_view, 'compound_grid'):
+                
+                self.main_view.compound_grid.update_colors(self.color_picker.color_dict)
+            if hasattr(self.main_view, 'compound_data_chart'):
+                
+                self.main_view.compound_data_chart.update_colors(self.color_picker.color_dict)
+            if hasattr(self.main_view, 'cluster_viewer'):
+                
+                self.main_view.cluster_viewer.update_colors(self.color_picker.color_dict)
+        
 
     def serve(self):
         return pn.Row(
