@@ -125,7 +125,7 @@ class CategoryColorPicker(param.Parameterized):
                 prev if prev else self._default_palette[i % len(self._default_palette)]
             )
             widget = pn.widgets.ColorPicker(
-                name=str(category), value=default, width=120, height=50, margin=(5, 10)
+                name=str(category), value=default, width=100, height=50, margin=(5, 5)
             )
             widget.param.watch(self._on_color_change, "value")
             self._color_widgets[str(category)] = widget
