@@ -88,7 +88,7 @@ class MainViewManager(param.Parameterized):
         if not self.app.library or not hasattr(self.app.library, "super_clusters"):
             return
 
-        # Create the GridSpec layout matching clusterf.py
+        
         main_grid = pn.GridSpec(
             nrows=3,
             ncols=2,
@@ -101,8 +101,6 @@ class MainViewManager(param.Parameterized):
         # Layout matching clusterf.py:
         # Row 0, Col 0: Network graph
         main_grid[0, 0] = self.cluster_viewer.view
-        # Row 0, Col 1: Compound grid (carousel)
-        main_grid[0:2, 1] = self.compound_grid.view
         # Row 1, Col 0: Category histogram
         main_grid[1, 0] = self.category_histogram.view
         # Row 2, Col 0: Compound table (Tabulator)
@@ -111,9 +109,13 @@ class MainViewManager(param.Parameterized):
             sizing_mode="stretch_width",
             margin=0,
         )
-        # Row 2, Col 1: Compound lifetime chart
-        main_grid[2, 1] = self.compound_data_chart.view
-
+        right_stack = pn.Column(
+            self.compound_grid.view,
+            self.compound_data_chart.view,
+            sizing_mode="stretch_both",
+            margin=0,
+        )
+        main_grid[0:3, 1] = right_stack
         # Update the main content
         self.main_content.objects = [main_grid]
 
