@@ -35,8 +35,8 @@ class Carrousel(param.Parameterized):
             align="center",
             sizing_mode="fixed",
             width=150,
-            height=100,
-            margin=0,
+            height=35,
+            margin=(1, 1),
         )
         self.update_carrousel()
 
@@ -81,10 +81,9 @@ class Carrousel(param.Parameterized):
 
     def view(self):
         return pn.Column(
-            pn.Row(self.svg_viewer, sizing_mode="stretch_both"),
+            pn.Row(self.svg_viewer, height=650, margin=(0, 0)),
             self.buttons,
             sizing_mode="stretch_both",
-            # max_height=800,
             margin=0,
         )
 
