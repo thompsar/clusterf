@@ -154,10 +154,44 @@ class CompoundTable(param.Parameterized):
             # Update the table
             self.table_widget.value = table_df
             self.table_widget.disabled = False
+            self._apply_category_styling()
 
         except Exception as e:
             print(f"Error updating compound table: {e}")
             self.table_widget.value = pd.DataFrame()
+
+    def _apply_category_styling(self):
+        """Apply styling to the Category column based on color dictionary."""
+        if not hasattr(self.app, "color_picker") or not hasattr(
+            self.app.color_picker, "color_dict"
+        ):
+            return
+
+        color_dict = self.app.color_picker.color_dict
+        if not color_dict:
+            return
+
+        def style_row(row):
+            # Create a list of empty styles for all columns
+            styles = [""] * len(row)
+
+            # Only style the Category column
+            if "Category" in row.index and pd.notna(row["Category"]):
+                category = row["Category"]
+                color = color_dict.get(category, "#FFFFFF")  # Default to white
+                category_index = row.index.get_loc("Category")
+                styles[category_index] = f"background-color: {color};"
+
+            return styles
+
+        self.table_widget.style.apply(style_row, axis=1)
+
+    def update_colors(self, color_dict: dict):
+        """Update colors and reapply styling to the table."""
+        # The color_dict is already available through self.app.color_picker.color_dict
+        # so we just need to reapply the styling
+        self._apply_category_styling()
+        self.update_table()
 
     def _toggle_miss_compounds(self, event):
         """Toggle the display of 'Miss' compounds."""
@@ -260,11 +294,11 @@ class CompoundTable(param.Parameterized):
     def clear_super_cluster_context(self):
         """Clear the current super cluster context."""
         self.current_super_cluster = None
-    
+
     def clear_selection(self):
         """Clear the table selection and reset selected compounds."""
         self.selected_compounds = []
-        if hasattr(self, 'table_widget'):
+        if hasattr(self, "table_widget"):
             self.table_widget.selection = []
 
     def _on_table_value_changed(self, event):

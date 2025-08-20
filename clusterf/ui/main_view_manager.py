@@ -218,6 +218,7 @@ class MainViewManager(param.Parameterized):
             self.compound_grid.update_colors(color_dict)
             self.category_histogram.update_colors(color_dict)
             self.compound_data_chart.update_colors(color_dict)
+            self.compound_table.update_colors(color_dict)
 
     def _on_dataset_changed(self):
         """Handle dataset changes by refreshing components that depend on dataset categories."""
