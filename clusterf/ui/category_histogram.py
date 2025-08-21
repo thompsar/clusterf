@@ -36,6 +36,7 @@ class CategoryHistogram(param.Parameterized):
             title="Category Distribution",
             collapsed=False,
             margin=(5, 5),
+            sizing_mode="stretch_both",
         )
 
     def update_histogram(self, super_cluster_number: int = None):
@@ -121,9 +122,8 @@ class CategoryHistogram(param.Parameterized):
             # Create HoloViews bar chart
             bars = hv.Bars(hist_data, ["Category"], ["Count", "%Total", "Color"]).opts(
                 color="Color",
-                min_width=300,
                 min_height=300,
-                responsive=False,
+                responsive=True,
                 title=f"Category Distribution - Super Cluster {self.current_super_cluster}",
                 ylabel="Count",
                 xlabel="",
