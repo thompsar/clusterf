@@ -203,6 +203,7 @@ class CompoundDataChart(param.Parameterized):
                     ylim=(-y_limit, y_limit),
                     xrotation=45,
                     tools=["hover"],
+                    active_tools=[],
                     show_grid=True,
                     show_legend=True,
                     legend_position="right",

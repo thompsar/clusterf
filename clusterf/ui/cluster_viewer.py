@@ -155,7 +155,7 @@ class SuperClusterViewer(param.Parameterized):
             "responsive": False,
             "xaxis": None,
             "yaxis": None,
-            "tools": ["tap", "box_select", "lasso_select"],
+            "tools": ["tap"],
             "active_tools": ["tap"],
         }
         
