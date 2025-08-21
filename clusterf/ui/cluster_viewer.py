@@ -268,3 +268,16 @@ class SuperClusterViewer(param.Parameterized):
     def view(self):
         """Property accessor for the Panel component."""
         return self.get_view()
+
+    def reset(self):
+        """Reset the viewer to its initial launch state."""
+        # Clear internal graph state
+        self.G = None
+        self.pos = None
+        self.cluster_color_map = {}
+        self.graph = None
+        self.selection = None
+        self.selected_nodes = []
+        # Clear the rendered plot
+        if hasattr(self, "plot"):
+            self.plot.object = None

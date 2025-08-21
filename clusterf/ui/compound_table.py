@@ -376,3 +376,13 @@ class CompoundTable(param.Parameterized):
                 ].astype("boolean")
         except Exception:
             pass
+
+    def reset(self):
+        """Reset the table to the initial state."""
+        self.show_miss_compounds = False
+        self.selected_compounds = []
+        self.current_super_cluster = None
+        if hasattr(self, "table_widget"):
+            self.table_widget.value = pd.DataFrame()
+            self.table_widget.disabled = True
+            self.table_widget.selection = []

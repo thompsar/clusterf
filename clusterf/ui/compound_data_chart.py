@@ -221,3 +221,11 @@ class CompoundDataChart(param.Parameterized):
             # Update the chart with current compounds to apply the new filter
             if self.selected_compounds:
                 self.update_chart()
+
+    def reset(self):
+        """Reset the chart to the initial state."""
+        self.color_dict = {}
+        self.selected_compounds = []
+        self.show_miss_compounds = True
+        if hasattr(self, "chart_pane"):
+            self.chart_pane.objects = []

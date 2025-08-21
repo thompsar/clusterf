@@ -98,3 +98,13 @@ class SuperClusterSelector(param.Parameterized):
         """Programmatically set the super cluster selection."""
         if super_cluster_number in self.param.current_super_cluster.objects:
             self.current_super_cluster = super_cluster_number
+
+    def reset(self):
+        """Reset the selector to the initial disabled/hidden state."""
+        self.total_super_clusters = 1
+        self.param.current_super_cluster.objects = [1]
+        self.current_super_cluster = 1
+        if hasattr(self, "slider_widget"):
+            self.slider_widget.disabled = True
+        if hasattr(self, "controls"):
+            self.controls.visible = False

@@ -42,6 +42,7 @@ class ClusterFApp(param.Parameterized):
 
         # Watch for color changes and propagate to main view
         self.color_picker.param.watch(self._on_color_change, "color_dict")
+    # Also watch dataset_loaded to propagate resets if needed (handled via _on_dataset_loaded)
 
     def _on_color_change(self, event):
         """Handle color changes from the color picker."""
@@ -71,14 +72,29 @@ class ClusterFApp(param.Parameterized):
 
     def _on_dataset_loaded(self):
         """Handle dataset loading completion."""
-        # Toggle the dataset_loaded parameter to trigger watchers
+        # Reset app UI to launch state when a new dataset is loaded
+        self.reset_app_state()
+        # Toggle the dataset_loaded parameter to trigger watchers (color picker, etc.)
         self.dataset_loaded = not self.dataset_loaded
 
         # Notify main view of dataset change (if main view exists)
-        if hasattr(self, "main_view") and hasattr(
-            self.main_view, "_on_dataset_changed"
-        ):
+        if hasattr(self, "main_view") and hasattr(self.main_view, "_on_dataset_changed"):
             self.main_view._on_dataset_changed()
+
+    def reset_app_state(self):
+        """Reset UI components and clustering state to initial launch state."""
+        # Reset clustering state on the library if present
+        if hasattr(self, "library") and self.library and hasattr(self.library, "reset_clustering_state"):
+            self.library.reset_clustering_state()
+        # Reset main view and children
+        if hasattr(self, "main_view") and hasattr(self.main_view, "reset"):
+            self.main_view.reset()
+        # Reset super cluster selector
+        if hasattr(self, "super_cluster_selector") and hasattr(self.super_cluster_selector, "reset"):
+            self.super_cluster_selector.reset()
+        # Reset color picker UI; it will rebuild after dataset_loaded toggles
+        if hasattr(self, "color_picker") and hasattr(self.color_picker, "reset"):
+            self.color_picker.reset()
 
     def _on_color_picker_rebuilt(self):
         """Handle color picker rebuild completion."""
