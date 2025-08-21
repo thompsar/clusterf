@@ -8,6 +8,42 @@ if TYPE_CHECKING:
     from clusterf.app import ClusterFApp
 
 
+# Bokeh hook: push Bars below other glyphs so overlays like ErrorBars render on top
+# see https://github.com/holoviz/holoviews/issues/1968
+def _bars_to_underlay(plot, element):
+    """Set the Bars glyph renderer to 'underlay' level in Bokeh to ensure
+    other overlays (e.g., ErrorBars) are drawn above the bars.
+    """
+    try:
+        renderer = plot.handles.get("glyph_renderer")
+        if renderer is not None:
+            # Valid Bokeh levels: 'image', 'underlay', 'glyph', 'annotation', 'overlay'
+            # renderer.level = "underlay"
+            renderer.level = "underlay"
+    except Exception:
+        # Best-effort; ignore if backend/structure differs
+        pass
+
+
+def _push_grid_to_bottom(plot, element):
+    """Force the plot's grid renderers to the lowest 'image' level so the grid
+    is always the most underlaid item.
+    """
+    try:
+        fig = getattr(plot, "state", None)
+        if fig is None:
+            return
+        # xgrid and ygrid are lists of Grid renderers
+        for grid in list(getattr(fig, "xgrid", [])) + list(getattr(fig, "ygrid", [])):
+            try:
+                grid.level = "image"
+            except Exception:
+                continue
+    except Exception:
+        # Ignore if backend changes or attributes differ
+        pass
+
+
 class CompoundDataChart(param.Parameterized):
     """
     A component for displaying compound data visualizations.
@@ -107,12 +143,12 @@ class CompoundDataChart(param.Parameterized):
                     ]
                     return
 
-            # Create statistics
+            # Create statistics (include count to determine if error bars are needed)
             stats_df = (
                 compound_df.groupby(["Compound", "Construct"])[metric]
-                .agg(["mean", "std"])
+                .agg(["mean", "std", "count"])
                 .reset_index()
-                .rename(columns={"mean": "Mean", "std": "Std"})
+                .rename(columns={"mean": "Mean", "std": "Std", "count": "N"})
             )
 
             # Add category information
@@ -134,10 +170,13 @@ class CompoundDataChart(param.Parameterized):
             else:
                 title = f"Delta Lifetime Z for {len(self.selected_compounds)} Compounds"
 
-            # Calculate symmetrical y-axis limits based on data (matching clusterf.py)
-            max_abs_value = max(
-                abs(stats_df["Mean"].min()), abs(stats_df["Mean"].max())
-            )
+            # Calculate symmetrical y-axis limits based on data including std
+            # Use max(|mean| + std) to ensure error bars fit
+            max_abs_value = 0.0
+            if not stats_df.empty:
+                max_abs_value = float(
+                    (stats_df["Mean"].abs() + stats_df["Std"].fillna(0)).max()
+                )
             # Add some padding and ensure we can see ±4 lines
             y_limit = max(max_abs_value * 1.1, 4.5)
 
@@ -165,7 +204,13 @@ class CompoundDataChart(param.Parameterized):
                     show_grid=True,
                     show_legend=True,
                     legend_position="right",
+                    hooks=[_bars_to_underlay, _push_grid_to_bottom],
                 )
+
+                # Add symmetric error bars (Mean ± Std) only when N>1 and Std is present
+                error_df = construct_df[["Compound", "Mean", "Std", "N"]].copy()
+                error_df = error_df[error_df["N"] > 1]
+                error_df = error_df[error_df["Std"].notna() & (error_df["Std"] > 0)]
 
                 # Add horizontal reference lines at ±4
                 hline_pos4 = hv.HLine(4).opts(
@@ -174,8 +219,18 @@ class CompoundDataChart(param.Parameterized):
                 hline_neg4 = hv.HLine(-4).opts(
                     color="red", line_dash="dashed", line_width=2, alpha=0.7
                 )
-
                 overlay = bars * hline_pos4 * hline_neg4
+                if not error_df.empty:
+                    errorbars = hv.ErrorBars(
+                        error_df,
+                        kdims=["Compound"],
+                        vdims=["Mean", "Std"],
+                    ).opts(
+                        color="black",
+                        line_width=2,
+                        line_alpha=0.9,
+                    )
+                    overlay = overlay * errorbars
 
                 chart_panes.append(
                     pn.pane.HoloViews(
