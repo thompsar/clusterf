@@ -98,17 +98,16 @@ class MainViewManager(param.Parameterized):
             styles={"gap": "2px", "padding": "2px", "box-sizing": "border-box"},
         )
 
-        # Layout matching clusterf.py:
-        # Row 0, Col 0: Network graph
-        main_grid[0, 0] = self.cluster_viewer.view
-        # Row 1, Col 0: Category histogram
-        main_grid[1, 0] = self.category_histogram.view
-        # Row 2, Col 0: Compound table (Tabulator)
-        main_grid[2, 0] = pn.Row(
+        # Left stack: Column of cards so collapsing one moves others up
+        left_stack = pn.Column(
+            self.cluster_viewer.view,
+            self.category_histogram.view,
             self.compound_table.view,
-            sizing_mode="stretch_width",
+            sizing_mode="stretch_both",
             margin=0,
         )
+        main_grid[0:3, 0] = left_stack
+
         right_stack = pn.Column(
             self.compound_grid.view,
             self.compound_data_chart.view,
