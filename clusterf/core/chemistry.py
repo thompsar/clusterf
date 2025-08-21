@@ -527,6 +527,30 @@ class ChemLibrary:
             how="left",
         )
 
+    def reset_clustering_state(self):
+        """Clear any attributes derived from building super clusters/graphs.
+
+        This is used when loading a new dataset or switching libraries to ensure
+        no stale state persists.
+        """
+        for attr in [
+            "graph",
+            "sub_graph",
+            "node_pos",
+            "super_clusters",
+        ]:
+            if hasattr(self, attr):
+                try:
+                    delattr(self, attr)
+                except Exception:
+                    setattr(self, attr, None)
+        # Also clear SuperCluster column from df if present (it will be recomputed later)
+        try:
+            if hasattr(self, "df") and "SuperCluster" in self.df.columns:
+                self.df = self.df.drop(columns=["SuperCluster"])
+        except Exception:
+            pass
+
     def compute_saturation_metrics(self):
         """
         Compute and attach saturation metrics to subset_df:

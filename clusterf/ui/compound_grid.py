@@ -137,3 +137,11 @@ class CompoundGrid(param.Parameterized):
             # Update the grid with current compounds to apply the new filter
             if self.compounds:
                 self.update_compounds(self.compounds)
+
+    def reset(self):
+        """Reset the grid to the initial state."""
+        self.compounds = []
+        self.color_dict = {}
+        self.show_miss_compounds = True
+        if hasattr(self, "carousel"):
+            self.carousel.svgs = []

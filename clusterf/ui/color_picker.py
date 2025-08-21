@@ -154,3 +154,13 @@ class CategoryColorPicker(param.Parameterized):
     def _on_color_change(self, _):
         # Sync dict from widget values
         self.color_dict = {name: w.value for name, w in self._color_widgets.items()}
+
+    def reset(self):
+        """Reset the color picker to initial hidden state and clear colors."""
+        self._color_widgets.clear()
+        self.color_dict = {}
+        if hasattr(self, "controls"):
+            self.controls.visible = False
+            self.controls.objects = [
+                pn.pane.Markdown("*No categories loaded. Load a dataset first.*")
+            ]

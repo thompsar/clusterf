@@ -95,6 +95,9 @@ class SuperClusterBuilder(param.Parameterized):
     @param.depends("library_select", watch=True)
     def _load_library(self):
         if self.library_select:
+            # Reset the app state before loading a new library
+            if hasattr(self.app, "reset_app_state"):
+                self.app.reset_app_state()
             self.app.library = ChemLibrary(
                 self.library_select,
                 fine_threshold=self.fine_threshold,
@@ -110,6 +113,10 @@ class SuperClusterBuilder(param.Parameterized):
 
             # Expand the cluster builder card when library changes
             self.controls.collapsed = False
+            
+            # Trigger dataset change/reset sequence for UI widgets that depend on categories
+            if hasattr(self.app, "_on_dataset_loaded"):
+                self.app._on_dataset_loaded()
             # print(self.app.library.df.head())
 
     def _update_clustering_options(self):
@@ -134,6 +141,9 @@ class SuperClusterBuilder(param.Parameterized):
     @param.depends("dataset_select", watch=True)
     def _load_dataset(self):
         if hasattr(self.app, "library") and self.app.library and self.dataset_select:
+            # Reset the app state before applying the newly loaded dataset
+            if hasattr(self.app, "reset_app_state"):
+                self.app.reset_app_state()
             self.app.library.load_dataset(
                 os.path.join(self.app.DATASETS_DIR, self.dataset_select)
             )
@@ -158,6 +168,9 @@ class SuperClusterBuilder(param.Parameterized):
                 fine_threshold=self.fine_threshold, method=self.method
             )
         self.clusters_built = False
+        # Clear any computed clustering state on library
+        if hasattr(self.app, "library") and hasattr(self.app.library, "reset_clustering_state"):
+            self.app.library.reset_clustering_state()
 
         # Expand the cluster builder card when parameters change
         self.controls.collapsed = False
@@ -166,6 +179,9 @@ class SuperClusterBuilder(param.Parameterized):
     def _build_super_clusters(self):
         if getattr(self.app, "library", None):
             try:
+                # Clear previous clustering state before building anew
+                if hasattr(self.app.library, "reset_clustering_state"):
+                    self.app.library.reset_clustering_state()
                 self.app.library.cluster_subset_df(self.coarse_threshold)
                 self.app.library.build_graph()
 

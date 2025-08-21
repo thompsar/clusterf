@@ -135,6 +135,23 @@ class MainViewManager(param.Parameterized):
             )
         ]
 
+    def reset(self):
+        """Reset all main view components and content to the launch state."""
+        self.clusters_built = False
+        # Reset child components if they expose reset
+        if hasattr(self, "cluster_viewer") and hasattr(self.cluster_viewer, "reset"):
+            self.cluster_viewer.reset()
+        if hasattr(self, "category_histogram") and hasattr(self.category_histogram, "reset"):
+            self.category_histogram.reset()
+        if hasattr(self, "compound_grid") and hasattr(self.compound_grid, "reset"):
+            self.compound_grid.reset()
+        if hasattr(self, "compound_data_chart") and hasattr(self.compound_data_chart, "reset"):
+            self.compound_data_chart.reset()
+        if hasattr(self, "compound_table") and hasattr(self.compound_table, "reset"):
+            self.compound_table.reset()
+        # Finally reset the main view content
+        self._reset_main_view()
+
     def _on_cluster_selection_change(self, selected_nodes):
         """Handle cluster selection changes from the cluster viewer."""
         # This method will be called by the cluster viewer when nodes are selected
@@ -224,31 +241,8 @@ class MainViewManager(param.Parameterized):
 
     def _on_dataset_changed(self):
         """Handle dataset changes by refreshing components that depend on dataset categories."""
-        
-        # Reset any clustering state since dataset changed
-        self.clusters_built = False
-        
-        # Immediately clear all component panes to prevent showing old data
-        if hasattr(self, "category_histogram"):
-            
-            self.category_histogram.histogram_pane.object = None
-        if hasattr(self, "compound_grid"):
-            
-            self.compound_grid.carousel.svgs = []
-            self.compound_grid.compounds = []
-        if hasattr(self, "compound_data_chart"):
-            
-            self.compound_data_chart.chart_pane.object = None
-        if hasattr(self, "cluster_viewer"):
-            
-            self.cluster_viewer.plot.object = None
-        if hasattr(self, "compound_table"):
-            
-            self.compound_table.clear_selection()
-            self.compound_table.clear_super_cluster_context()
-        
-        # Now reset the main view to show the welcome message
-        self._reset_main_view()
+        # Delegate to full reset which clears all state and UI
+        self.reset()
         
 
     def update_cluster_view(self, super_cluster_number):

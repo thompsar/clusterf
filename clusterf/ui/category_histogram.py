@@ -169,6 +169,13 @@ class CategoryHistogram(param.Parameterized):
 
         self.update_histogram()
 
+    def reset(self):
+        """Reset the histogram to the initial state."""
+        self.color_dict = {}
+        self.current_super_cluster = 1
+        if hasattr(self, "histogram_pane"):
+            self.histogram_pane.object = None
+
     def _get_current_super_cluster_compounds(self):
         """Get list of compounds in the current super cluster."""
         if not self.app.library or not hasattr(self.app.library, "df"):
