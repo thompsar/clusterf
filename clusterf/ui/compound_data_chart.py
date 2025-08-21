@@ -164,12 +164,6 @@ class CompoundDataChart(param.Parameterized):
                 "#999999"  # Default color for missing categories
             )
 
-            # Create title based on number of compounds (matching clusterf.py)
-            if len(self.selected_compounds) == 1:
-                title = f"Delta Lifetime Z for Compound {self.selected_compounds[0]}"
-            else:
-                title = f"Delta Lifetime Z for {len(self.selected_compounds)} Compounds"
-
             # Calculate symmetrical y-axis limits based on data including std
             # Use max(|mean| + std) to ensure error bars fit
             max_abs_value = 0.0
@@ -185,6 +179,14 @@ class CompoundDataChart(param.Parameterized):
             constructs = list(stats_df["Construct"].drop_duplicates())
             for construct in constructs:
                 construct_df = stats_df[stats_df["Construct"] == construct]
+
+                # Determine the actual number of plotted compounds for this construct
+                plotted_compounds = list(construct_df["Compound"].unique())
+                n_plotted = len(plotted_compounds)
+                if n_plotted == 1:
+                    title = f"Delta Lifetime Z for Compound {plotted_compounds[0]}"
+                else:
+                    title = f"Delta Lifetime Z for {n_plotted} Compounds"
 
                 bars = hv.Bars(
                     construct_df,
@@ -232,7 +234,11 @@ class CompoundDataChart(param.Parameterized):
                     )
                     # Raw replicate points for compounds with N>1 (same condition as error bars)
                     raw_df = self.app.library.dataset_df[
-                        (self.app.library.dataset_df["Compound"].isin(self.selected_compounds))
+                        (
+                            self.app.library.dataset_df["Compound"].isin(
+                                self.selected_compounds
+                            )
+                        )
                         & (self.app.library.dataset_df["Construct"] == construct)
                     ][["Compound", metric]].copy()
                     # Limit raw points to compounds that have error bars (N>1)
