@@ -230,7 +230,25 @@ class CompoundDataChart(param.Parameterized):
                         line_width=2,
                         line_alpha=0.9,
                     )
-                    overlay = overlay * errorbars
+                    # Raw replicate points for compounds with N>1 (same condition as error bars)
+                    raw_df = self.app.library.dataset_df[
+                        (self.app.library.dataset_df["Compound"].isin(self.selected_compounds))
+                        & (self.app.library.dataset_df["Construct"] == construct)
+                    ][["Compound", metric]].copy()
+                    # Limit raw points to compounds that have error bars (N>1)
+                    raw_df = raw_df[raw_df["Compound"].isin(error_df["Compound"])]
+
+                    points = hv.Scatter(
+                        raw_df,
+                        kdims=["Compound"],
+                        vdims=[metric],
+                    ).opts(
+                        color="black",
+                        size=6,
+                        alpha=0.6,
+                    )
+
+                    overlay = overlay * errorbars * points
 
                 chart_panes.append(
                     pn.pane.HoloViews(
