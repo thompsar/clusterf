@@ -57,6 +57,14 @@ class SuperClusterViewer(param.Parameterized):
         self.plot = pn.pane.HoloViews(
             object=None, sizing_mode="stretch_both", margin=0, name="Cluster Graph"
         )
+        # Wrap in a Card for consistency with other views
+        self.card = pn.Card(
+            self.plot,
+            title="Cluster Viewer",
+            collapsed=False,
+            margin=(5, 5),
+            sizing_mode="stretch_both",
+        )
 
     def initialize_graph(self, graph):
         """
@@ -262,7 +270,7 @@ class SuperClusterViewer(param.Parameterized):
 
     def get_view(self):
         """Return the Panel component for embedding in layouts."""
-        return self.plot
+        return self.card
 
     @property
     def view(self):
