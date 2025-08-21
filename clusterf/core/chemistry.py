@@ -675,7 +675,21 @@ class ChemLibrary:
             compound_ids = [compound_ids]
         compound_ids = [str(compound_id) for compound_id in compound_ids]
 
-        subset = self.df[self.df["Compound"].isin(compound_ids)]
+        subset = self.df[self.df["Compound"].isin(compound_ids)].copy()
+
+        # Respect input order: sort subset according to the ordered compound_ids list
+        try:
+            order = pd.Categorical(
+                subset["Compound"], categories=compound_ids, ordered=True
+            )
+            subset = (
+                subset.assign(__order=order)
+                .sort_values("__order")
+                .drop(columns=["__order"])
+            )
+        except Exception:
+            # If anything goes wrong, fall back to original subset order
+            pass
 
         # check for missing compounds
         missing = set(compound_ids) - set(subset["Compound"])
@@ -717,8 +731,8 @@ class ChemLibrary:
 
         img_size = 300  # Smaller size for better performance in web apps
         chem_info = self.get_compounds(compound_ids)
-        # redefine compound_ids below to handle input of bad ID
-        compound_ids = chem_info["Compound"].values
+        # redefine compound_ids below to handle input of bad ID, preserving order from get_compounds
+        compound_ids = chem_info["Compound"].values.tolist()
         all_categories = chem_info["Category"].values
         all_mols = [
             Chem.MolFromSmiles(smiles_str) for smiles_str in chem_info["SMILES"]
@@ -770,8 +784,8 @@ class ChemLibrary:
                 highlightAtomLists=atoms,
                 highlightAtomColors=colors,
                 legends=[
-                    str(id) + "\n\n" + str(cat) if cat != "Miss" else str(id)
-                    for id, cat in zip(ids, categories)
+                    (str(cid) + "\n\n" + str(cat)) if cat != "Miss" else str(cid)
+                    for cid, cat in zip(ids, categories)
                 ],
                 useSVG=True,  # Use SVG rendering for efficiency
             )
