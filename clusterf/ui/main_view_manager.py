@@ -149,6 +149,8 @@ class MainViewManager(param.Parameterized):
             self.compound_data_chart.reset()
         if hasattr(self, "compound_table") and hasattr(self.compound_table, "reset"):
             self.compound_table.reset()
+        # Re-synchronize the miss compounds state (default: hidden)
+        self._synchronize_miss_compounds_state()
         # Finally reset the main view content
         self._reset_main_view()
 

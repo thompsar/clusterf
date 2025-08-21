@@ -65,6 +65,7 @@ class CompoundTable(param.Parameterized):
     def _create_table_controls(self):
         """Create table control buttons."""
         # Toggle miss compounds button
+        # Label will be set based on current state below
         self.toggle_miss_button = pn.widgets.Button(
             name="Show Misses", button_type="light", width=120, height=28
         )
@@ -76,6 +77,10 @@ class CompoundTable(param.Parameterized):
         )
         self.retest_button.on_click(self._retest_selected)
 
+        # Ensure button label reflects current state without recreating the widget
+        self.toggle_miss_button.name = (
+            "Hide Misses" if self.show_miss_compounds else "Show Misses"
+        )
         return pn.Row(
             self.retest_button,
             self.toggle_miss_button,
@@ -386,3 +391,11 @@ class CompoundTable(param.Parameterized):
             self.table_widget.value = pd.DataFrame()
             self.table_widget.disabled = True
             self.table_widget.selection = []
+        # Reset toggle button label to reflect hidden misses
+        if hasattr(self, "toggle_miss_button"):
+            self.toggle_miss_button.name = "Show Misses"
+        # Ensure downstream components pick up the default state
+        try:
+            self.update_table()
+        except Exception:
+            pass

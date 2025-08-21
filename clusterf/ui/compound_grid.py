@@ -16,7 +16,7 @@ class CompoundGrid(param.Parameterized):
     app: "ClusterFApp" = param.Parameter(default=None, doc="Reference to main ClusterF application")
     compounds = param.List(default=[], doc="List of compound IDs to display")
     color_dict = param.Dict(default={}, doc="Color mapping for compound categories")
-    show_miss_compounds = param.Boolean(default=True, doc="Whether to show 'Miss' compounds")
+    show_miss_compounds = param.Boolean(default=False, doc="Whether to show 'Miss' compounds")
     
     def __init__(self, app: "ClusterFApp", **params):
         super().__init__(**params)
@@ -142,6 +142,6 @@ class CompoundGrid(param.Parameterized):
         """Reset the grid to the initial state."""
         self.compounds = []
         self.color_dict = {}
-        self.show_miss_compounds = True
+        self.show_miss_compounds = False
         if hasattr(self, "carousel"):
             self.carousel.svgs = []
