@@ -51,139 +51,56 @@ class DatasetStatsCard(param.Parameterized):
         self.refresh()
 
     # ---- Internals ----
-    def _aggregate_categories(self, df: pd.DataFrame) -> pd.DataFrame:
-        if df is None or df.empty or "Compound" not in df.columns or "Category" not in df.columns:
-            return pd.DataFrame(columns=["Compound", "Category", "Retest"]).astype({"Retest": "boolean"})
+    def _stats_from_df(self, df: pd.DataFrame, dedupe_by_compound: bool = True) -> Dict[str, Any]:
+        if df is None or df.empty or "Category" not in df.columns:
+            return {"total_hits": 0, "interfering": 0, "retest": 0, "by_category": {}}
 
-        # Normalize types
-        temp = df.copy()
-        if "Compound" in temp.columns:
-            temp["Compound"] = temp["Compound"].astype(str)
-        if "Retest" not in temp.columns:
-            temp["Retest"] = False
+        value_counts = df[df.Category!="Miss"].drop_duplicates(subset="Compound").Category.value_counts()
+        
+
+        # Interfering total
         try:
-            temp["Retest"] = temp["Retest"].astype("boolean").fillna(False)
-        except Exception:
-            pass
+            interfering_total = value_counts['Interfering']
+        except KeyError:
+            interfering_total = 0
 
-        # Exclude Miss rows for aggregation
-        non_miss = temp[temp["Category"] != "Miss"].copy()
-        if non_miss.empty:
-            out = (
-                temp[["Compound"]]
-                .drop_duplicates()
-                .assign(Category="Miss", Retest=False)
-            )
-            return out.astype({"Retest": "boolean"})
 
-        def _aggregate_category_label(group: pd.DataFrame) -> str:
-            cats = group["Category"].astype(str)
-            # Interfering overrides everything
-            if cats.str.contains("Interfering", case=False, na=False).any():
-                return "Interfering"
+        value_counts.drop(index=['Interfering'], inplace=True)
+        non_interfering_hit_counts = value_counts
 
-            plus_mask = cats == "Hit(+)"
-            minus_mask = cats == "Hit(-)"
+        total_hits = int(value_counts.sum())
 
-            # Build construct-based labels if Construct is present
-            if "Construct" in group.columns:
-                constructs_plus = (
-                    group.loc[plus_mask, "Construct"].astype(str).unique().tolist()
-                )
-                constructs_minus = (
-                    group.loc[minus_mask, "Construct"].astype(str).unique().tolist()
-                )
-                constructs_plus = sorted([c for c in constructs_plus if pd.notna(c)])
-                constructs_minus = sorted([c for c in constructs_minus if pd.notna(c)])
-                if constructs_plus and constructs_minus:
-                    constructs = sorted(set(constructs_plus) | set(constructs_minus))
-                    return f"{'/'.join(constructs)} Hit(+/-)"
-                if constructs_plus:
-                    return f"{'/'.join(constructs_plus)} Hit(+)"
-                if constructs_minus:
-                    return f"{'/'.join(constructs_minus)} Hit(-)"
+        # Retest total (unique compounds with any True)
+        
+        retest_total = int(df.groupby("Compound")["Retest"].any().sum())
+        
+        #     retest_total = int(bool(tmp["Retest"].any()))
 
-            # Fallback to first non-miss category
-            non_miss_cats = cats[cats != "Miss"].dropna().astype(str)
-            return non_miss_cats.iloc[0] if not non_miss_cats.empty else "Miss"
-
-        agg_cat = non_miss.groupby("Compound").apply(_aggregate_category_label)
-        out = agg_cat.reset_index().rename(columns={0: "Category"})
-
-        # Retest aggregated per compound (any True)
-        try:
-            retest_map = (
-                temp.groupby("Compound")["Retest"].apply(lambda s: bool(pd.Series(s).astype(bool).any())).to_dict()
-            )
-        except Exception:
-            retest_map = {}
-        out["Retest"] = out["Compound"].map(retest_map).fillna(False)
-        try:
-            out["Retest"] = out["Retest"].astype("boolean")
-        except Exception:
-            pass
-        return out
+        return {
+            "total_hits": total_hits,
+            "interfering": interfering_total,
+            "retest": retest_total,
+            "by_category": {k: int(v) for k, v in non_interfering_hit_counts.to_dict().items()},
+        }
 
     def _compute_primary_stats(self) -> Dict[str, Any]:
         lib = getattr(self.app, "library", None)
         if lib is None or not hasattr(lib, "primary_dataset_df"):
             return {"total_hits": 0, "interfering": 0, "retest": 0, "by_category": {}}
-
-        agg = self._aggregate_categories(lib.primary_dataset_df)
-        return self._stats_from_agg(agg)
+        return self._stats_from_df(lib.primary_dataset_df, dedupe_by_compound=True)
 
     def _compute_full_stats(self) -> Dict[str, Any]:
         lib = getattr(self.app, "library", None)
         if lib is None:
             return {"total_hits": 0, "interfering": 0, "retest": 0, "by_category": {}}
 
-        # Prefer subset_df if present, else aggregate from dataset_df
+        # Prefer subset_df (already unique per compound); else use working dataset and dedupe
         if hasattr(lib, "subset_df") and isinstance(lib.subset_df, pd.DataFrame) and not lib.subset_df.empty:
-            agg = lib.subset_df[["Compound", "Category", "Retest"]].copy()
-            if "Retest" not in agg.columns:
-                agg["Retest"] = False
-            try:
-                agg["Retest"] = agg["Retest"].astype("boolean").fillna(False)
-            except Exception:
-                pass
+            return self._stats_from_df(lib.subset_df, dedupe_by_compound=False)
         elif hasattr(lib, "dataset_df"):
-            agg = self._aggregate_categories(lib.dataset_df)
+            return self._stats_from_df(lib.dataset_df, dedupe_by_compound=True)
         else:
-            agg = pd.DataFrame(columns=["Compound", "Category", "Retest"])  # empty
-
-        return self._stats_from_agg(agg)
-
-    def _stats_from_agg(self, agg: pd.DataFrame) -> Dict[str, Any]:
-        if agg is None or agg.empty:
             return {"total_hits": 0, "interfering": 0, "retest": 0, "by_category": {}}
-
-        cats = agg["Category"].astype(str)
-        # Total hits: any category indicating a hit (exclude Miss and Interfering)
-        is_hit = cats.str.contains("Hit", na=False)
-        is_interfering = cats.str.contains("Interfering", case=False, na=False)
-        total_hits = int(((is_hit) & (~is_interfering)).sum())
-
-        # Interfering total
-        total_interfering = int(is_interfering.sum())
-
-        # Retest total
-        total_retest = int(pd.Series(agg.get("Retest", False)).astype(bool).sum())
-
-        # Breakdown by hit category (exclude Interfering and Miss)
-        mask = (~is_interfering) & (cats != "Miss")
-        by_cat = (
-            cats[mask]
-            .value_counts()
-            .sort_index()
-            .to_dict()
-        )
-
-        return {
-            "total_hits": total_hits,
-            "interfering": total_interfering,
-            "retest": total_retest,
-            "by_category": by_cat,
-        }
 
     def _render_stats_md(self, stats: Dict[str, Any]) -> str:
         if not stats:
