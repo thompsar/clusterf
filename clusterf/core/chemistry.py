@@ -368,24 +368,70 @@ class ChemLibrary:
         if not hasattr(self, "dataset_df"):
             raise ValueError("dataset_df not loaded. Call load_dataset first.")
 
-        # Get clustering columns that might already exist in dataset_df
-        clustering_columns = []
-        for column in self.dataset_df.columns:
-            if column in ["Cluster", "SuperCluster"]:
-                clustering_columns.append(column)
+        # Consolidate categories across constructs per compound when secondaries are merged
+        if "Construct" in self.dataset_df.columns:
+            non_miss = self.dataset_df[self.dataset_df["Category"] != "Miss"].copy()
 
-        columns = ["Compound"] + clustering_columns + ["Category", "Retest"]
+            def _aggregate_category(group: pd.DataFrame) -> pd.Series:
+                # Interfering overrides
+                if group["Category"].astype(str).str.contains(
+                    "Interfering", case=False, na=False
+                ).any():
+                    cat_label = "Interfering"
+                else:
+                    plus_mask = group["Category"].astype(str) == "Hit(+)"
+                    minus_mask = group["Category"].astype(str) == "Hit(-)"
+                    constructs_plus = (
+                        group.loc[plus_mask, "Construct"].astype(str).unique().tolist()
+                    )
+                    constructs_minus = (
+                        group.loc[minus_mask, "Construct"].astype(str).unique().tolist()
+                    )
+                    constructs_plus = sorted(constructs_plus)
+                    constructs_minus = sorted(constructs_minus)
+                    if constructs_plus and constructs_minus:
+                        constructs = sorted(set(constructs_plus) | set(constructs_minus))
+                        cat_label = f"{'/'.join(constructs)} Hit(+/-)"
+                    elif constructs_plus:
+                        cat_label = f"{'/'.join(constructs_plus)} Hit(+)"
+                    elif constructs_minus:
+                        cat_label = f"{'/'.join(constructs_minus)} Hit(-)"
+                    else:
+                        # Fallback to first non-miss category if present
+                        non_miss_cats = (
+                            group["Category"][group["Category"] != "Miss"].dropna().astype(str)
+                        )
+                        cat_label = non_miss_cats.iloc[0] if not non_miss_cats.empty else "Miss"
 
-        # Create subset_df with unique compounds
-        self.subset_df = (
-            self.dataset_df[self.dataset_df.Category != "Miss"][columns]
-            .drop_duplicates(subset="Compound")
-            .reset_index(drop=True)
-        )
+                # Aggregate retest as any True
+                retest_val = False
+                if "Retest" in group.columns:
+                    try:
+                        retest_val = bool(group["Retest"].astype(bool).any())
+                    except Exception:
+                        retest_val = bool(group["Retest"].any())
+                return pd.Series({"Category": cat_label, "Retest": retest_val})
 
-        self.subset_df["Retest"] = (
-            self.subset_df["Retest"].astype("boolean").fillna(False)
-        )
+            agg = non_miss.groupby("Compound").apply(_aggregate_category)
+            self.subset_df = agg.reset_index()
+            # Normalize dtype
+            try:
+                self.subset_df["Retest"] = self.subset_df["Retest"].astype("boolean")
+            except Exception:
+                pass
+        else:
+            # Fallback behavior if Construct not available: keep first non-miss per compound
+            columns = ["Compound", "Category", "Retest"]
+            existing = [c for c in columns if c in self.dataset_df.columns]
+            self.subset_df = (
+                self.dataset_df[self.dataset_df.Category != "Miss"][existing]
+                .drop_duplicates(subset="Compound")
+                .reset_index(drop=True)
+            )
+            if "Retest" in self.subset_df.columns:
+                self.subset_df["Retest"] = (
+                    self.subset_df["Retest"].astype("boolean").fillna(False)
+                )
 
         # Get clustering information from chemical data (self.df)
         if "Cluster" in self.df.columns:
