@@ -372,49 +372,61 @@ class ChemLibrary:
         if "Construct" in self.dataset_df.columns:
             non_miss = self.dataset_df[self.dataset_df["Category"] != "Miss"].copy()
 
-            def _aggregate_category(group: pd.DataFrame) -> pd.Series:
+            def _aggregate_category_label(group: pd.DataFrame) -> str:
                 # Interfering overrides
                 if group["Category"].astype(str).str.contains(
                     "Interfering", case=False, na=False
                 ).any():
-                    cat_label = "Interfering"
-                else:
-                    plus_mask = group["Category"].astype(str) == "Hit(+)"
-                    minus_mask = group["Category"].astype(str) == "Hit(-)"
-                    constructs_plus = (
-                        group.loc[plus_mask, "Construct"].astype(str).unique().tolist()
-                    )
-                    constructs_minus = (
-                        group.loc[minus_mask, "Construct"].astype(str).unique().tolist()
-                    )
-                    constructs_plus = sorted(constructs_plus)
-                    constructs_minus = sorted(constructs_minus)
-                    if constructs_plus and constructs_minus:
-                        constructs = sorted(set(constructs_plus) | set(constructs_minus))
-                        cat_label = f"{'/'.join(constructs)} Hit(+/-)"
-                    elif constructs_plus:
-                        cat_label = f"{'/'.join(constructs_plus)} Hit(+)"
-                    elif constructs_minus:
-                        cat_label = f"{'/'.join(constructs_minus)} Hit(-)"
-                    else:
-                        # Fallback to first non-miss category if present
-                        non_miss_cats = (
-                            group["Category"][group["Category"] != "Miss"].dropna().astype(str)
-                        )
-                        cat_label = non_miss_cats.iloc[0] if not non_miss_cats.empty else "Miss"
+                    return "Interfering"
+                plus_mask = group["Category"].astype(str) == "Hit(+)"
+                minus_mask = group["Category"].astype(str) == "Hit(-)"
+                constructs_plus = (
+                    group.loc[plus_mask, "Construct"].astype(str).unique().tolist()
+                )
+                constructs_minus = (
+                    group.loc[minus_mask, "Construct"].astype(str).unique().tolist()
+                )
+                constructs_plus = sorted(constructs_plus)
+                constructs_minus = sorted(constructs_minus)
+                if constructs_plus and constructs_minus:
+                    constructs = sorted(set(constructs_plus) | set(constructs_minus))
+                    return f"{'/'.join(constructs)} Hit(+/-)"
+                if constructs_plus:
+                    return f"{'/'.join(constructs_plus)} Hit(+)"
+                if constructs_minus:
+                    return f"{'/'.join(constructs_minus)} Hit(-)"
+                # Fallback to first non-miss category if present
+                non_miss_cats = (
+                    group["Category"][group["Category"] != "Miss"].dropna().astype(str)
+                )
+                return non_miss_cats.iloc[0] if not non_miss_cats.empty else "Miss"
 
-                # Aggregate retest as any True
-                retest_val = False
-                if "Retest" in group.columns:
-                    try:
-                        retest_val = bool(group["Retest"].astype(bool).any())
-                    except Exception:
-                        retest_val = bool(group["Retest"].any())
-                return pd.Series({"Category": cat_label, "Retest": retest_val})
+            # Build aggregated categories per compound
+            agg_cat = non_miss.groupby("Compound").apply(_aggregate_category_label)
+            self.subset_df = agg_cat.reset_index().rename(columns={0: "Category"})
 
-            agg = non_miss.groupby("Compound").apply(_aggregate_category)
-            self.subset_df = agg.reset_index()
-            # Normalize dtype
+            # Determine Retest strictly from primary dataset if available, else fallback to working dataset
+            retest_map = None
+            if hasattr(self, "primary_dataset_df") and isinstance(self.primary_dataset_df, pd.DataFrame):
+                try:
+                    retest_map = (
+                        self.primary_dataset_df.groupby("Compound")["Retest"]
+                        .apply(lambda s: bool(pd.Series(s).astype(bool).any()))
+                        .to_dict()
+                    )
+                except Exception:
+                    retest_map = None
+            if retest_map is None:
+                try:
+                    retest_map = (
+                        non_miss.groupby("Compound")["Retest"]
+                        .apply(lambda s: bool(pd.Series(s).astype(bool).any()))
+                        .to_dict()
+                    )
+                except Exception:
+                    retest_map = {}
+
+            self.subset_df["Retest"] = self.subset_df["Compound"].map(retest_map).fillna(False)
             try:
                 self.subset_df["Retest"] = self.subset_df["Retest"].astype("boolean")
             except Exception:
