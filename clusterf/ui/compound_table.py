@@ -97,7 +97,7 @@ class CompoundTable(param.Parameterized):
         )
 
     def _save_retest_changes(self, event=None):
-        """Sync Retest from subset_df -> dataset_df and save to original dataset file."""
+        """Sync Retest changes and save only the primary dataset."""
         try:
             lib = getattr(self, "app", None)
             lib = getattr(lib, "library", None) if lib else None
@@ -107,13 +107,15 @@ class CompoundTable(param.Parameterized):
             if not hasattr(lib, "subset_df") or not hasattr(lib, "dataset_df"):
                 return
 
-            # Update dataset Retest from subset Retest (by Compound)
+            # First, update working dataset for UI consistency
             if hasattr(lib, "sync_retest_to_dataset"):
                 lib.sync_retest_to_dataset()
 
-            # Save dataset back to disk
-            if hasattr(lib, "save_dataset"):
-                lib.save_dataset()
+            # Then, sync and save only the primary dataset
+            if hasattr(lib, "sync_retest_to_primary_dataset"):
+                lib.sync_retest_to_primary_dataset()
+            if hasattr(lib, "save_primary_dataset"):
+                lib.save_primary_dataset()
 
         except Exception as e:
             print(f"Error saving retest changes: {e}")
