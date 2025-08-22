@@ -117,6 +117,13 @@ class CompoundTable(param.Parameterized):
             if hasattr(lib, "save_primary_dataset"):
                 lib.save_primary_dataset()
 
+            # Refresh stats card if present
+            if hasattr(self.app, "dataset_stats"):
+                try:
+                    self.app.dataset_stats.refresh()
+                except Exception:
+                    pass
+
         except Exception as e:
             print(f"Error saving retest changes: {e}")
 
@@ -290,6 +297,13 @@ class CompoundTable(param.Parameterized):
 
             print(f"Toggled Retest status for {len(selected_compounds)} compounds")
 
+            # Refresh stats card if present
+            if hasattr(self.app, "dataset_stats"):
+                try:
+                    self.app.dataset_stats.refresh()
+                except Exception:
+                    pass
+
         except Exception as e:
             print(f"Error toggling retest status: {e}")
 
@@ -412,6 +426,13 @@ class CompoundTable(param.Parameterized):
                 ].astype("boolean")
         except Exception:
             pass
+
+        # Refresh stats card if present
+        if hasattr(self.app, "dataset_stats"):
+            try:
+                self.app.dataset_stats.refresh()
+            except Exception:
+                pass
 
     def reset(self):
         """Reset the table to the initial state."""
