@@ -7,6 +7,7 @@ from clusterf.ui.cluster_builder import SuperClusterBuilder
 from clusterf.ui.color_picker import CategoryColorPicker
 from clusterf.ui.main_view_manager import MainViewManager
 from clusterf.ui.super_cluster_selector import SuperClusterSelector
+from clusterf.ui.dataset_stats import DatasetStatsCard
 
 if TYPE_CHECKING:
     from clusterf.core.chemistry import ChemLibrary
@@ -30,10 +31,12 @@ class ClusterFApp(param.Parameterized):
         self.color_picker = CategoryColorPicker(app=self)
         self.main_view = MainViewManager(app=self)
         self.super_cluster_selector = SuperClusterSelector(app=self)
+        self.dataset_stats = DatasetStatsCard(app=self)
 
         self.sidebar = pn.Column(
             self.sc_builder.controls,
             self.color_picker.controls,
+            self.dataset_stats.view,
             self.super_cluster_selector.controls,
             width=250,
             margin=(5, 5),
@@ -117,6 +120,9 @@ class ClusterFApp(param.Parameterized):
                 self.main_view.compound_table.update_colors(
                     self.color_picker.color_dict
                 )
+            # Refresh stats in case category names/colors changed
+            if hasattr(self, "dataset_stats"):
+                self.dataset_stats.refresh()
 
     def serve(self):
         return pn.Row(
