@@ -151,12 +151,14 @@ class CompoundDataChart(param.Parameterized):
                 .rename(columns={"mean": "Mean", "std": "Std", "count": "N"})
             )
 
-            # Add category information
-            stats_df = stats_df.merge(
-                compound_df[["Compound", "Category"]].drop_duplicates(),
-                on="Compound",
-                how="left",
-            )
+            # Add aggregated category information per compound from subset_df
+            # This aligns with the color picker which is built from subset_df categories
+            if hasattr(self.app.library, "subset_df"):
+                cat_source = self.app.library.subset_df[["Compound", "Category"]].drop_duplicates()
+            else:
+                # Fallback to dataset rows (may be inconsistent across constructs)
+                cat_source = compound_df[["Compound", "Category"]].drop_duplicates()
+            stats_df = stats_df.merge(cat_source, on="Compound", how="left")
 
             # Add colors using color_dict mapping (matching clusterf.py)
             stats_df["Color"] = stats_df["Category"].map(self.color_dict)
