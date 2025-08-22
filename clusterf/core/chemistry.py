@@ -198,6 +198,8 @@ class ChemLibrary:
         Expects dataset to have Category column pre-populated, including "Miss".
         Supports both CSV and Parquet file formats.
         """
+        # Keep track of dataset file path for saving later
+        self.dataset_path = path
         if path.lower().endswith(".parquet"):
             self.dataset_df = pd.read_parquet(path)
         else:
@@ -269,6 +271,47 @@ class ChemLibrary:
         # save for later debugging
         # print('retest column value counts:')
         # print(self.df['Retest'].value_counts())
+
+    def sync_retest_to_dataset(self):
+        """Update dataset_df['Retest'] from subset_df['Retest'] aligned on Compound.
+
+        Efficient alignment via map on the Compound index. Keeps boolean dtype stable.
+        """
+        if not hasattr(self, "dataset_df") or not hasattr(self, "subset_df"):
+            return
+        try:
+            # Build map Compound -> Retest from subset_df
+            retest_map = (
+                self.subset_df.set_index("Compound")["Retest"].astype("boolean").to_dict()
+            )
+            # Update dataset_df where Compound exists in map
+            mask = self.dataset_df["Compound"].isin(retest_map.keys())
+            if mask.any():
+                self.dataset_df.loc[mask, "Retest"] = (
+                    self.dataset_df.loc[mask, "Compound"].map(retest_map)
+                )
+                # Normalize dtype
+                self.dataset_df["Retest"] = self.dataset_df["Retest"].astype("boolean")
+        except Exception as e:
+            print(f"Error syncing Retest to dataset: {e}")
+
+    def save_dataset(self):
+        """Persist current dataset_df back to its source path (parquet or csv)."""
+        if not hasattr(self, "dataset_df"):
+            return
+        path = getattr(self, "dataset_path", None)
+        if not path:
+            print("No dataset_path set; cannot save dataset.")
+            return
+        try:
+            # Save using original format by extension
+            if path.lower().endswith(".parquet"):
+                self.dataset_df.to_parquet(path, index=False)
+            else:
+                self.dataset_df.to_csv(path, index=False)
+            print(f"Saved dataset to {path}")
+        except Exception as e:
+            print(f"Failed to save dataset to {path}: {e}")
 
     def create_subset_df(self):
         """

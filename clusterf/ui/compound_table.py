@@ -77,17 +77,46 @@ class CompoundTable(param.Parameterized):
         )
         self.retest_button.on_click(self._retest_selected)
 
+        # Save Retest button
+        self.save_retest_button = pn.widgets.Button(
+            name="Save Retest", button_type="primary", width=120, height=28
+        )
+        self.save_retest_button.on_click(self._save_retest_changes)
+
         # Ensure button label reflects current state without recreating the widget
         self.toggle_miss_button.name = (
             "Hide Misses" if self.show_miss_compounds else "Show Misses"
         )
         return pn.Row(
             self.retest_button,
+            self.save_retest_button,
             self.toggle_miss_button,
             sizing_mode="fixed",
-            width=250,
+            width=380,
             margin=(0, 2, 0, 0),
         )
+
+    def _save_retest_changes(self, event=None):
+        """Sync Retest from subset_df -> dataset_df and save to original dataset file."""
+        try:
+            lib = getattr(self, "app", None)
+            lib = getattr(lib, "library", None) if lib else None
+            if lib is None:
+                return
+            # Ensure subset_df/dataset_df exist
+            if not hasattr(lib, "subset_df") or not hasattr(lib, "dataset_df"):
+                return
+
+            # Update dataset Retest from subset Retest (by Compound)
+            if hasattr(lib, "sync_retest_to_dataset"):
+                lib.sync_retest_to_dataset()
+
+            # Save dataset back to disk
+            if hasattr(lib, "save_dataset"):
+                lib.save_dataset()
+
+        except Exception as e:
+            print(f"Error saving retest changes: {e}")
 
     def update_table(self, compounds: list = None, super_cluster: int = None):
         """Update the table with new compound data."""
