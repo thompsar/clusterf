@@ -221,7 +221,7 @@ class ChemLibrary:
         # self.dataset_df.Compound = self.dataset_df.Compound.astype(str)
 
         if "Retest" not in self.dataset_df.columns:
-            self.dataset_df["Retest"] = False
+            self.dataset_df["Retest"] = True
 
         # Create subset_df with unique compounds and their categories
         self.create_subset_df()
