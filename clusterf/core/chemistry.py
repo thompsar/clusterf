@@ -402,7 +402,10 @@ class ChemLibrary:
                 return non_miss_cats.iloc[0] if not non_miss_cats.empty else "Miss"
 
             # Build aggregated categories per compound
-            agg_cat = non_miss.groupby("Compound").apply(_aggregate_category_label)
+            agg_cat = non_miss.groupby("Compound", group_keys=False).apply(
+                _aggregate_category_label,
+                include_groups=False,
+            )
             self.subset_df = agg_cat.reset_index().rename(columns={0: "Category"})
 
             # Determine Retest strictly from primary dataset if available, else fallback to working dataset
@@ -410,19 +413,13 @@ class ChemLibrary:
             if hasattr(self, "primary_dataset_df") and isinstance(self.primary_dataset_df, pd.DataFrame):
                 try:
                     retest_map = (
-                        self.primary_dataset_df.groupby("Compound")["Retest"]
-                        .apply(lambda s: bool(pd.Series(s).astype(bool).any()))
-                        .to_dict()
+                        self.primary_dataset_df.groupby("Compound")["Retest"].any().to_dict()
                     )
                 except Exception:
                     retest_map = None
             if retest_map is None:
                 try:
-                    retest_map = (
-                        non_miss.groupby("Compound")["Retest"]
-                        .apply(lambda s: bool(pd.Series(s).astype(bool).any()))
-                        .to_dict()
-                    )
+                    retest_map = non_miss.groupby("Compound")["Retest"].any().to_dict()
                 except Exception:
                     retest_map = {}
 
