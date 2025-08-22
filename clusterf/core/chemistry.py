@@ -198,39 +198,38 @@ class ChemLibrary:
         Expects dataset to have Category column pre-populated, including "Miss".
         Supports both CSV and Parquet file formats.
         """
-        # Keep track of dataset file path for saving later
-        self.dataset_path = path
-        if path.lower().endswith(".parquet"):
-            self.dataset_df = pd.read_parquet(path)
-        else:
-            self.dataset_df = pd.read_csv(
-                path, dtype={"Compound": str, "Sub Categories": str}
-            )
+        # Backwards-compatible: treat as primary dataset load
+        self.load_primary_dataset(path)
 
-        # drop super cluster column if it exists
-        # since dataset will have na for some values and dont want to deal with those for now.
-        if "SuperCluster" in self.dataset_df.columns:
-            self.dataset_df = self.dataset_df.drop(columns=["SuperCluster"])
-        # clear these out, as the user may have changed the dataset and we dont want to use the old values
+    def _read_dataset_file(self, path):
+        """Read a dataset file and remove stale clustering columns."""
+        if path.lower().endswith(".parquet"):
+            df = pd.read_parquet(path)
+        else:
+            df = pd.read_csv(path, dtype={"Compound": str, "Sub Categories": str})
+        if "SuperCluster" in df.columns:
+            df = df.drop(columns=["SuperCluster"])
+        return df
+
+    def _standardize_dataset_df(self, df):
+        if "Compound" in df.columns:
+            df["Compound"] = df["Compound"].astype(str)
+        if "Retest" not in df.columns:
+            df["Retest"] = False
+        try:
+            df["Retest"] = df["Retest"].astype("boolean").fillna(False)
+        except Exception:
+            pass
+        return df
+
+    def _reset_df_category_retest_columns(self):
         if "Category" in self.df.columns:
             self.df = self.df.drop(columns=["Category"])
         if "Retest" in self.df.columns:
             self.df = self.df.drop(columns=["Retest"])
 
-        # # Convert Compound column to string
-        # self.dataset_df.Compound = self.dataset_df.Compound.astype(str)
-
-        if "Retest" not in self.dataset_df.columns:
-            self.dataset_df["Retest"] = True
-
-        # Create subset_df with unique compounds and their categories
-        self.create_subset_df()
-
-        # Merge categories into main library df
-        # Only merge columns that don't already exist in the main df
+    def _merge_subset_into_df(self):
         subset_columns = ["Compound", "Category", "Retest"]
-
-        # TODO: revist the if else below, may not be needed in full extent, just unable to debug zzzz
         existing_columns = [col for col in subset_columns if col in self.df.columns]
         new_columns = [col for col in subset_columns if col not in self.df.columns]
         if new_columns:
@@ -240,37 +239,49 @@ class ChemLibrary:
                 how="left",
             )
         else:
-            # If no new columns, just update existing ones
             for col in existing_columns:
                 if col in self.subset_df.columns:
                     try:
                         self.df[col] = self.df["Compound"].map(
                             self.subset_df.set_index("Compound")[col]
                         )
-                    except KeyError as e:
-                        print(f"Error updating column {col}: {e}")
-                        print(f"subset_df columns: {list(self.subset_df.columns)}")
-                        print(f"subset_df shape: {self.subset_df.shape}")
+                    except KeyError:
                         continue
-
-        # Ensure no duplicate columns exist
         if self.df.columns.duplicated().any():
-            # Keep only the first occurrence of each column
             self.df = self.df.loc[:, ~self.df.columns.duplicated()]
-
         self.df["Category"] = self.df["Category"].fillna("Miss")
-        # Note below, converting to 'boolean' and not 'bool' was necessary to
-        # avoid FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and
-        # will change in a future version. Call result.infer_objects(copy=False) instead.
-        # To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
-        # except below line also throws FutureWarning:
-        # self.df["Retest"] = self.df["Retest"].fillna(False).astype(bool).infer_objects(copy=False)
-        self.df["Retest"] = self.df["Retest"].fillna(False)
-        self.df["Retest"] = self.df["Retest"].astype("boolean").fillna(False)
+        try:
+            self.df["Retest"] = self.df["Retest"].fillna(False)
+            self.df["Retest"] = self.df["Retest"].astype("boolean").fillna(False)
+        except Exception:
+            pass
 
-        # save for later debugging
-        # print('retest column value counts:')
-        # print(self.df['Retest'].value_counts())
+    def load_primary_dataset(self, path):
+        """Load primary dataset into primary_dataset_df and initialize dataset_df copy."""
+        self.primary_dataset_path = path
+        self.dataset_path = path  # legacy alias
+        primary_df = self._standardize_dataset_df(self._read_dataset_file(path))
+        self.primary_dataset_df = primary_df
+        self.dataset_df = self.primary_dataset_df.copy()
+        self._reset_df_category_retest_columns()
+        self.create_subset_df()
+        self._merge_subset_into_df()
+
+    def load_secondary_datasets(self, paths):
+        """Load multiple secondary datasets and merge into working dataset_df."""
+        if not hasattr(self, "primary_dataset_df"):
+            return
+        merged = [self.primary_dataset_df.copy()]
+        for p in paths or []:
+            try:
+                df = self._standardize_dataset_df(self._read_dataset_file(p))
+                merged.append(df)
+            except Exception as e:
+                print(f"Failed to load secondary dataset {p}: {e}")
+        self.dataset_df = pd.concat(merged, ignore_index=True, sort=False)
+        self._reset_df_category_retest_columns()
+        self.create_subset_df()
+        self._merge_subset_into_df()
 
     def sync_retest_to_dataset(self):
         """Update dataset_df['Retest'] from subset_df['Retest'] aligned on Compound.
@@ -295,6 +306,25 @@ class ChemLibrary:
         except Exception as e:
             print(f"Error syncing Retest to dataset: {e}")
 
+    def sync_retest_to_primary_dataset(self):
+        """Update primary_dataset_df['Retest'] only, from subset_df mapping."""
+        if not hasattr(self, "primary_dataset_df") or not hasattr(self, "subset_df"):
+            return
+        try:
+            retest_map = (
+                self.subset_df.set_index("Compound")["Retest"].astype("boolean").to_dict()
+            )
+            mask = self.primary_dataset_df["Compound"].isin(retest_map.keys())
+            if mask.any():
+                self.primary_dataset_df.loc[mask, "Retest"] = (
+                    self.primary_dataset_df.loc[mask, "Compound"].map(retest_map)
+                )
+                self.primary_dataset_df["Retest"] = self.primary_dataset_df["Retest"].astype(
+                    "boolean"
+                )
+        except Exception as e:
+            print(f"Error syncing Retest to primary dataset: {e}")
+
     def save_dataset(self):
         """Persist current dataset_df back to its source path (parquet or csv)."""
         if not hasattr(self, "dataset_df"):
@@ -312,6 +342,23 @@ class ChemLibrary:
             print(f"Saved dataset to {path}")
         except Exception as e:
             print(f"Failed to save dataset to {path}: {e}")
+
+    def save_primary_dataset(self):
+        """Persist primary_dataset_df back to its original path only."""
+        if not hasattr(self, "primary_dataset_df"):
+            return
+        path = getattr(self, "primary_dataset_path", None)
+        if not path:
+            print("No primary_dataset_path set; cannot save primary dataset.")
+            return
+        try:
+            if path.lower().endswith(".parquet"):
+                self.primary_dataset_df.to_parquet(path, index=False)
+            else:
+                self.primary_dataset_df.to_csv(path, index=False)
+            print(f"Saved primary dataset to {path}")
+        except Exception as e:
+            print(f"Failed to save primary dataset to {path}: {e}")
 
     def create_subset_df(self):
         """

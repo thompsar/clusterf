@@ -13,7 +13,9 @@ if TYPE_CHECKING:
 class SuperClusterBuilder(param.Parameterized):
     app: ClusterFApp
     library_select = param.Selector(default=None, doc="Select a compound library")
-    dataset_select = param.Selector(default=None, doc="Select a dataset")
+    # Primary/Secondary dataset widgets
+    primary_dataset_select = param.Selector(default=None, doc="Primary dataset")
+    secondary_datasets_select = param.ListSelector(default=[], doc="Secondary datasets")
     method = param.Selector(objects=["RDKit"], default="RDKit", doc="Clustering method")
     fine_threshold = param.Selector(objects=[0.2], default=0.2)
     coarse_threshold = param.Selector(
@@ -40,8 +42,11 @@ class SuperClusterBuilder(param.Parameterized):
         self.library_select_widget = pn.widgets.Select.from_param(
             self.param.library_select, name="Library", width=200
         )
-        self.dataset_select_widget = pn.widgets.Select.from_param(
-            self.param.dataset_select, name="Dataset", width=200
+        self.primary_dataset_widget = pn.widgets.Select.from_param(
+            self.param.primary_dataset_select, name="Primary Dataset", width=200
+        )
+        self.secondary_datasets_widget = pn.widgets.MultiSelect.from_param(
+            self.param.secondary_datasets_select, name="Secondary Datasets", width=200, size=6
         )
 
         # Create side-by-side method and threshold selectors
@@ -70,7 +75,8 @@ class SuperClusterBuilder(param.Parameterized):
         # Create controls first
         self.controls = pn.Card(
             self.library_select_widget,
-            self.dataset_select_widget,
+            self.primary_dataset_widget,
+            self.secondary_datasets_widget,
             self.clustering_params_row,
             self.coarse_threshold_widget,
             self.cluster_button_widget,
@@ -88,9 +94,11 @@ class SuperClusterBuilder(param.Parameterized):
         datasets = sorted(
             f for f in os.listdir(app.DATASETS_DIR) if f.endswith((".csv", ".parquet"))
         )
-        self.param.dataset_select.objects = datasets
+        self.param.primary_dataset_select.objects = datasets
         if datasets:
-            self.dataset_select = datasets[0]
+            self.primary_dataset_select = datasets[0]
+            # Secondary initially excludes primary
+            self._update_secondary_options()
 
     @param.depends("library_select", watch=True)
     def _load_library(self):
@@ -138,26 +146,41 @@ class SuperClusterBuilder(param.Parameterized):
                 if self.fine_threshold not in available_params["thresholds"]:
                     self.fine_threshold = available_params["thresholds"][0]
 
-    @param.depends("dataset_select", watch=True)
-    def _load_dataset(self):
-        if hasattr(self.app, "library") and self.app.library and self.dataset_select:
-            # Reset the app state before applying the newly loaded dataset
+    def _update_secondary_options(self):
+        """Refresh secondary options to exclude the currently selected primary."""
+        all_datasets = list(self.param.primary_dataset_select.objects or [])
+        primary = self.primary_dataset_select
+        secondary_options = [d for d in all_datasets if d != primary]
+        self.param.secondary_datasets_select.objects = secondary_options
+        # Drop any selected secondaries that now conflict with primary
+        self.secondary_datasets_select = [d for d in self.secondary_datasets_select if d in secondary_options]
+
+    @param.depends("primary_dataset_select", watch=True)
+    def _on_primary_dataset_changed(self):
+        # Adjust secondary options when primary changes
+        self._update_secondary_options()
+        if hasattr(self.app, "library") and self.app.library and self.primary_dataset_select:
+            # Reset state before loading new primary
             if hasattr(self.app, "reset_app_state"):
                 self.app.reset_app_state()
-            self.app.library.load_dataset(
-                os.path.join(self.app.DATASETS_DIR, self.dataset_select)
+            self.app.library.load_primary_dataset(
+                os.path.join(self.app.DATASETS_DIR, self.primary_dataset_select)
             )
-            # Reset clusters when dataset changes
             self.clusters_built = False
-
-            # Expand the cluster builder card when dataset changes
             self.controls.collapsed = False
-            
-            # Notify the app that a dataset has been loaded
-            if hasattr(self.app, '_on_dataset_loaded'):
+            if hasattr(self.app, "_on_dataset_loaded"):
                 self.app._on_dataset_loaded()
-            
-            # print(self.app.library.dataset_df.head())
+
+    @param.depends("secondary_datasets_select", watch=True)
+    def _on_secondary_datasets_changed(self):
+        if hasattr(self.app, "library") and self.app.library:
+            # Load secondaries into working dataset
+            paths = [os.path.join(self.app.DATASETS_DIR, f) for f in (self.secondary_datasets_select or [])]
+            self.app.library.load_secondary_datasets(paths)
+            self.clusters_built = False
+            self.controls.collapsed = False
+            if hasattr(self.app, "_on_dataset_loaded"):
+                self.app._on_dataset_loaded()
 
     @param.depends("method", "fine_threshold", "coarse_threshold", watch=True)
     def _reset_clusters(self):
