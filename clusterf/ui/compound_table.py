@@ -172,9 +172,24 @@ class CompoundTable(param.Parameterized):
                 table_df = table_df[table_df["Category"] != "Miss"]
 
             # Select only the desired columns
-            desired_columns = ["Compound", "clogP", "Cluster", "Category", "Retest"]
+            desired_columns_head = ["Compound", "clogP"]
+            desired_columns_tail = ["Cluster", "Category", "Retest"]
             # TODO: add a column picker
-            # available_columns = [col for col in desired_columns if col in table_df.columns]
+            # Find any columns in table_df that start with 'construct'
+            construct_columns = [
+                col
+                for col in table_df.columns
+                if col in self.app.library.dataset_df.Construct.unique()
+            ]
+            # Remember construct symbol columns for styling
+            self.construct_symbol_columns = construct_columns
+
+            if construct_columns:
+                desired_columns = (
+                    desired_columns_head + construct_columns + desired_columns_tail
+                )
+            else:
+                desired_columns = desired_columns_head + desired_columns_tail
 
             # If some columns are missing, add them with default values
             for col in desired_columns:
@@ -224,6 +239,28 @@ class CompoundTable(param.Parameterized):
                 color = color_dict.get(category, "#FFFFFF")  # Default to white
                 category_index = row.index.get_loc("Category")
                 styles[category_index] = f"background-color: {color};"
+
+            # Emphasize and color construct symbol columns if present
+            try:
+                construct_cols = getattr(self, "construct_symbol_columns", []) or []
+                if construct_cols:
+                    symbol_colors = {
+                        "▲": "#2ca02c",  # green for Hit(+)
+                        "▼": "#d62728",  # red for Hit(-)
+                        "⚠": "#ff7f0e",  # orange for Interfering
+                        "—": "#9e9e9e",  # gray for none/miss
+                    }
+                    for col in construct_cols:
+                        if col in row.index:
+                            val = str(row[col]) if pd.notna(row[col]) else ""
+                            col_idx = row.index.get_loc(col)
+                            color = symbol_colors.get(val, "#000000")
+                            styles[col_idx] = (
+                                f"text-align:center; font-size:17px; color:{color}; "
+                            )
+            except Exception:
+                pass
+            
 
             return styles
 

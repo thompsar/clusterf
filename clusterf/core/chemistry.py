@@ -247,6 +247,22 @@ class ChemLibrary:
                         )
                     except KeyError:
                         continue
+        # Propagate any additional columns from subset_df (e.g., per-construct symbols) if present
+        try:
+            base_cols = {"Compound", "Category", "Retest"}
+            extra_cols = [
+                col
+                for col in self.subset_df.columns
+                if col not in base_cols and col not in self.df.columns
+            ]
+            if extra_cols:
+                self.df = self.df.merge(
+                    self.subset_df[["Compound"] + extra_cols],
+                    on="Compound",
+                    how="left",
+                )
+        except Exception:
+            pass
         if self.df.columns.duplicated().any():
             self.df = self.df.loc[:, ~self.df.columns.duplicated()]
         self.df["Category"] = self.df["Category"].fillna("Miss")
@@ -368,6 +384,38 @@ class ChemLibrary:
         if not hasattr(self, "dataset_df"):
             raise ValueError("dataset_df not loaded. Call load_dataset first.")
 
+        # Precompute per-construct symbol columns (before aggregation) if multiple constructs exist
+        construct_symbols_pivot = None
+        if "Construct" in self.dataset_df.columns:
+            try:
+                constructs_unique = (
+                    self.dataset_df["Construct"].astype(str).dropna().unique().tolist()
+                )
+                if len(constructs_unique) > 1:
+                    # For each Compound x Construct, determine symbol priority: ! > ↑ > ↓ > -
+                    def _symbolize_group(group: pd.DataFrame) -> str:
+                        cats = group["Category"].astype(str)
+                        if cats.str.contains("Interfering", case=False, na=False).any():
+                            return "⚠"
+                        if (cats == "Hit(+)").any():
+                            return "▲"
+                        if (cats == "Hit(-)").any():
+                            return "▼"
+                        return "—"
+
+                    by_cc = self.dataset_df.groupby(["Compound", "Construct"], group_keys=False)
+                    symbols_series = by_cc.apply(_symbolize_group, include_groups=False)
+                    symbols_df = symbols_series.reset_index(name="__Symbol__")
+                    pivot = (
+                        symbols_df.pivot(index="Compound", columns="Construct", values="__Symbol__")
+                        .fillna("-")
+                    )
+                    # Ensure construct column labels are strings
+                    pivot.columns = pivot.columns.astype(str)
+                    construct_symbols_pivot = pivot.reset_index()
+            except Exception:
+                construct_symbols_pivot = None
+
         # Consolidate categories across constructs per compound when secondaries are merged
         if "Construct" in self.dataset_df.columns:
             non_miss = self.dataset_df[self.dataset_df["Category"] != "Miss"].copy()
@@ -407,6 +455,15 @@ class ChemLibrary:
                 include_groups=False,
             )
             self.subset_df = agg_cat.reset_index().rename(columns={0: "Category"})
+
+            # Attach per-construct symbol columns if computed
+            if construct_symbols_pivot is not None:
+                try:
+                    self.subset_df = self.subset_df.merge(
+                        construct_symbols_pivot, on="Compound", how="left"
+                    )
+                except Exception:
+                    pass
 
             # Determine Retest strictly from primary dataset if available, else fallback to working dataset
             retest_map = None
