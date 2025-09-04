@@ -384,37 +384,37 @@ class ChemLibrary:
         if not hasattr(self, "dataset_df"):
             raise ValueError("dataset_df not loaded. Call load_dataset first.")
 
-        # Precompute per-construct symbol columns (before aggregation) if multiple constructs exist
-        construct_symbols_pivot = None
-        if "Construct" in self.dataset_df.columns:
-            try:
-                constructs_unique = (
-                    self.dataset_df["Construct"].astype(str).dropna().unique().tolist()
-                )
-                if len(constructs_unique) > 1:
-                    # For each Compound x Construct, determine symbol priority: ! > ↑ > ↓ > -
-                    def _symbolize_group(group: pd.DataFrame) -> str:
-                        cats = group["Category"].astype(str)
-                        if cats.str.contains("Interfering", case=False, na=False).any():
-                            return "⚠"
-                        if (cats == "Hit(+)").any():
-                            return "▲"
-                        if (cats == "Hit(-)").any():
-                            return "▼"
-                        return "—"
+        # # Precompute per-construct symbol columns (before aggregation) if multiple constructs exist
+        # construct_symbols_pivot = None
+        # if "Construct" in self.dataset_df.columns:
+        #     try:
+        #         constructs_unique = (
+        #             self.dataset_df["Construct"].astype(str).dropna().unique().tolist()
+        #         )
+        #         if len(constructs_unique) > 1:
+        #             # For each Compound x Construct, determine symbol priority: ! > ↑ > ↓ > -
+        #             def _symbolize_group(group: pd.DataFrame) -> str:
+        #                 cats = group["Category"].astype(str)
+        #                 if cats.str.contains("Interfering", case=False, na=False).any():
+        #                     return "⚠"
+        #                 if (cats == "Hit(+)").any():
+        #                     return "▲"
+        #                 if (cats == "Hit(-)").any():
+        #                     return "▼"
+        #                 return "—"
 
-                    by_cc = self.dataset_df.groupby(["Compound", "Construct"], group_keys=False)
-                    symbols_series = by_cc.apply(_symbolize_group, include_groups=False)
-                    symbols_df = symbols_series.reset_index(name="__Symbol__")
-                    pivot = (
-                        symbols_df.pivot(index="Compound", columns="Construct", values="__Symbol__")
-                        .fillna("-")
-                    )
-                    # Ensure construct column labels are strings
-                    pivot.columns = pivot.columns.astype(str)
-                    construct_symbols_pivot = pivot.reset_index()
-            except Exception:
-                construct_symbols_pivot = None
+        #             by_cc = self.dataset_df.groupby(["Compound", "Construct"], group_keys=False)
+        #             symbols_series = by_cc.apply(_symbolize_group, include_groups=False)
+        #             symbols_df = symbols_series.reset_index(name="__Symbol__")
+        #             pivot = (
+        #                 symbols_df.pivot(index="Compound", columns="Construct", values="__Symbol__")
+        #                 .fillna("-")
+        #             )
+        #             # Ensure construct column labels are strings
+        #             pivot.columns = pivot.columns.astype(str)
+        #             construct_symbols_pivot = pivot.reset_index()
+        #     except Exception:
+        #         construct_symbols_pivot = None
 
         # Consolidate categories across constructs per compound when secondaries are merged
         if "Construct" in self.dataset_df.columns:
@@ -422,17 +422,17 @@ class ChemLibrary:
 
             def _aggregate_category_label(group: pd.DataFrame) -> str:
                 # Interfering overrides
-                if group["Category"].astype(str).str.contains(
+                if group["Category"].str.contains(
                     "Interfering", case=False, na=False
                 ).any():
                     return "Interfering"
-                plus_mask = group["Category"].astype(str) == "Hit(+)"
-                minus_mask = group["Category"].astype(str) == "Hit(-)"
+                plus_mask = group["Category"] == "Hit(+)"
+                minus_mask = group["Category"] == "Hit(-)"
                 constructs_plus = (
-                    group.loc[plus_mask, "Construct"].astype(str).unique().tolist()
+                    group.loc[plus_mask, "Construct"].unique().tolist()
                 )
                 constructs_minus = (
-                    group.loc[minus_mask, "Construct"].astype(str).unique().tolist()
+                    group.loc[minus_mask, "Construct"].unique().tolist()
                 )
                 constructs_plus = sorted(constructs_plus)
                 constructs_minus = sorted(constructs_minus)
@@ -445,7 +445,7 @@ class ChemLibrary:
                     return f"{'/'.join(constructs_minus)} Hit(-)"
                 # Fallback to first non-miss category if present
                 non_miss_cats = (
-                    group["Category"][group["Category"] != "Miss"].dropna().astype(str)
+                    group["Category"][group["Category"] != "Miss"].dropna()
                 )
                 return non_miss_cats.iloc[0] if not non_miss_cats.empty else "Miss"
 
@@ -457,13 +457,13 @@ class ChemLibrary:
             self.subset_df = agg_cat.reset_index().rename(columns={0: "Category"})
 
             # Attach per-construct symbol columns if computed
-            if construct_symbols_pivot is not None:
-                try:
-                    self.subset_df = self.subset_df.merge(
-                        construct_symbols_pivot, on="Compound", how="left"
-                    )
-                except Exception:
-                    pass
+            # if construct_symbols_pivot is not None:
+            #     try:
+            #         self.subset_df = self.subset_df.merge(
+            #             construct_symbols_pivot, on="Compound", how="left"
+            #         )
+            #     except Exception:
+            #         pass
 
             # Determine Retest strictly from primary dataset if available, else fallback to working dataset
             retest_map = None

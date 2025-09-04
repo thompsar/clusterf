@@ -28,3 +28,6 @@ test_cluster_viewer.py
 test.ipynb
 data/libraries/old/cns.csv
 data/datasets/AurA_cMyc_CNS.parquet
+profile.out
+.gitignore
+debug.py
