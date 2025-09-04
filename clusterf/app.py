@@ -36,8 +36,8 @@ class ClusterFApp(param.Parameterized):
         self.sidebar = pn.Column(
             self.sc_builder.controls,
             self.color_picker.controls,
-            self.dataset_stats.view,
             self.super_cluster_selector.controls,
+            self.dataset_stats.view,
             width=250,
             margin=(5, 5),
             styles={"padding": "10px", "border-right": "1px solid #ddd"},
