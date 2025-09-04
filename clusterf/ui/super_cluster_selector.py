@@ -186,7 +186,11 @@ class SuperClusterSelector(param.Parameterized):
 
             # Compose once
             overlay = (base * highlight_dm).opts(
-                toolbar=None, hooks=[_hide_toolbar_logo]
+                toolbar=None,
+                hooks=[_hide_toolbar_logo],
+                shared_axes=False,
+                axiswise=True,
+                framewise=True,
             )
             self.chart_pane.object = overlay
 

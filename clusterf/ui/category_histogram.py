@@ -130,6 +130,9 @@ class CategoryHistogram(param.Parameterized):
                 xrotation=45,
                 tools=["hover"],
                 active_tools=[],
+                shared_axes=False,
+                axiswise=True,
+                framewise=True,
                 ylim=(
                     0,
                     1.2 * hist_data["Count"].max()
