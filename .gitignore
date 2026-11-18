@@ -31,3 +31,9 @@ data/datasets/AurA_cMyc_CNS.parquet
 profile.out
 .gitignore
 debug.py
+
+# Keep screening and chemical library data out of the public repository.
+/data/datasets/
+/data/libraries/
+/compound_libraries/
+/compound_subsets/
